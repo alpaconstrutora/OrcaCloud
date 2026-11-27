@@ -7,6 +7,9 @@ import type { EstadoDoSindico } from '../utils/acessoDoSindico';
 import type { ContaDoCondominio, TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
 import type {
+    ContratoDoCondominio, FormContaDoFornecedor, FormContrato, FornecedorDoCondominio,
+} from '../utils/fornecedoresDoSindico';
+import type {
     CotaParaGerar, CriterioDoRateio, PagadorDaCota, PreviaDoRateio, TipoDoRateio,
 } from '../utils/rateioDoSindico';
 import { linhasParaImportar, type CandidatoDoMovimento, type MovimentoDoExtrato } from '../utils/extratoDoSindico';
@@ -210,6 +213,15 @@ const params = (id: IdentidadeDoSindico) => ({ p_token: id.token ?? null, p_clie
 const FN_FINANCEIRO = 'sindico-portal-financeiro';
 
 /** RPC de escrita: `{ok:false, motivo}` vira erro com o motivo do banco. */
+/** O formulário do contrato no formato de `sindico_portal_contrato_salvar` / `_previa`. */
+function dadosDoContrato(f: FormContrato) {
+    return {
+        title: f.objeto.trim(), supplier_id: f.fornecedorId || null, value: f.valor, billing_cycle: f.periodicidade,
+        due_day: f.diaVencimento, start_date: f.inicio || null, end_date: f.fim || null,
+        cost_center_id: f.centroId || null, category_id: f.categoriaId || null,
+    };
+}
+
 async function escrever(rpc: string, args: Record<string, unknown>, padrao: string): Promise<Record<string, unknown>> {
     const { data, error } = await supabase.rpc(rpc, args);
     if (error) throw new Error(error.message);
@@ -478,6 +490,73 @@ export const sindicoPortalService = {
             ...params(id), p_empreendimento_id: condominioId, p_conta_id: contaId, p_dados: dados,
         }, 'Não foi possível salvar a conta.');
         return r.id as string;
+    },
+
+    // ── G3: fornecedores e contratos (26/11/2026) ─────────────────────────────
+    async getFornecedores(id: IdentidadeDoSindico, condominioId: string): Promise<FornecedorDoCondominio[]> {
+        const { data, error } = await supabase.rpc('sindico_portal_fornecedores', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; fornecedores?: FornecedorDoCondominio[] };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar os fornecedores.');
+        return r.fornecedores ?? [];
+    },
+
+    /** Trocar o nome acompanha os títulos em aberto (o banco conta quantos mudaram e quantos ficaram). */
+    async editarFornecedor(id: IdentidadeDoSindico, condominioId: string, supplierId: string, dados: FornecedorNovo):
+        Promise<{ titulosAtualizados: number; titulosMantidos: number }> {
+        const r = await escrever('sindico_portal_editar_fornecedor', {
+            ...params(id), p_empreendimento_id: condominioId, p_supplier_id: supplierId, p_dados: dados,
+        }, 'Não foi possível salvar o fornecedor.');
+        return { titulosAtualizados: Number(r.titulosAtualizados) || 0, titulosMantidos: Number(r.titulosMantidos) || 0 };
+    },
+
+    /** `contaId` vazio = conta nova; `ativa: false` desativa (nunca apaga). */
+    async salvarContaFornecedor(id: IdentidadeDoSindico, condominioId: string, supplierId: string, contaId: string | null,
+        f: FormContaDoFornecedor & { ativa: boolean }): Promise<string> {
+        const r = await escrever('sindico_portal_salvar_conta_fornecedor', {
+            ...params(id), p_empreendimento_id: condominioId, p_supplier_id: supplierId, p_conta_id: contaId,
+            p_dados: {
+                pix_key: f.pix.trim(), pix_key_type: f.pix.trim() ? f.tipoPix || null : null,
+                bank_name: f.banco.trim(), agency: f.agencia.trim(), account: f.conta.trim(), account_type: f.tipoConta,
+                beneficiary_name: f.titular.trim(), beneficiary_document: f.documentoTitular.trim(),
+                principal: f.principal, ativa: f.ativa,
+            },
+        }, 'Não foi possível salvar a conta do fornecedor.');
+        return r.id as string;
+    },
+
+    async getContratos(id: IdentidadeDoSindico, condominioId: string): Promise<ContratoDoCondominio[]> {
+        const { data, error } = await supabase.rpc('sindico_portal_contratos', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; contratos?: ContratoDoCondominio[] };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar os contratos.');
+        return r.contratos ?? [];
+    },
+
+    /** Os vencimentos que salvar vai gerar — calculados pelo banco (a mesma regra de quem grava). */
+    async contratoPrevia(id: IdentidadeDoSindico, condominioId: string, f: FormContrato): Promise<{ vencimentos: string[]; vencidas: number }> {
+        const { data, error } = await supabase.rpc('sindico_portal_contrato_previa', {
+            ...params(id), p_empreendimento_id: condominioId, p_dados: dadosDoContrato(f),
+        });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; vencimentos?: string[]; vencidas?: number };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível calcular as parcelas.');
+        return { vencimentos: r.vencimentos ?? [], vencidas: Number(r.vencidas) || 0 };
+    },
+
+    async salvarContrato(id: IdentidadeDoSindico, condominioId: string, f: FormContrato): Promise<{ id: string; numero: string; parcelas: number }> {
+        const r = await escrever('sindico_portal_contrato_salvar', {
+            ...params(id), p_empreendimento_id: condominioId, p_dados: dadosDoContrato(f),
+        }, 'Não foi possível salvar o contrato.');
+        return { id: r.id as string, numero: r.numero as string, parcelas: Number(r.parcelas) || 0 };
+    },
+
+    async encerrarContrato(id: IdentidadeDoSindico, condominioId: string, contratoId: string, fim: string, motivo: string):
+        Promise<{ canceladas: number; mantidas: number }> {
+        const r = await escrever('sindico_portal_contrato_encerrar', {
+            ...params(id), p_empreendimento_id: condominioId, p_contrato_id: contratoId, p_fim: fim, p_motivo: motivo,
+        }, 'Não foi possível encerrar o contrato.');
+        return { canceladas: Number(r.canceladas) || 0, mantidas: Number(r.mantidas) || 0 };
     },
 
     async receberTitulo(id: IdentidadeDoSindico, tituloId: string, recebimento: {

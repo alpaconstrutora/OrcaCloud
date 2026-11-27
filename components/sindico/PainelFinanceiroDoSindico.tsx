@@ -12,6 +12,8 @@ import { BaixaDoTituloSheet, CancelarTituloSheet, DesfazerBaixaSheet } from './B
 import LancarReceitaSheet from './LancarReceitaSheet';
 import PainelContasDoSindico from './PainelContasDoSindico';
 import PainelExtratoDoSindico from './PainelExtratoDoSindico';
+import PainelFornecedoresDoSindico from './PainelFornecedoresDoSindico';
+import PainelContratosDoSindico from './PainelContratosDoSindico';
 import {
     sindicoPortalService, type DocumentoDoTitulo, type FinanceiroDoSindico, type IdentidadeDoSindico, type PortalSindico,
 } from '../../services/sindicoPortalService';
@@ -212,7 +214,7 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                                 </select>
                             </label>
                         )}
-                        {subAba !== 'prestacao' && subAba !== 'contas' && (
+                        {subAba !== 'prestacao' && subAba !== 'contas' && subAba !== 'contratos' && subAba !== 'fornecedores' && (
                             <label className="flex items-center gap-2 text-[13px] text-[#8A8F9A]">
                                 Mês
                                 <input
@@ -254,6 +256,23 @@ const PainelFinanceiroDoSindico: React.FC<Props> = ({
                     identidade={identidade}
                     condominioId={condominioId}
                     condominioNome={dados.condominios.find(c => c.id === condominioId)?.nome ?? ''}
+                    motivoBase={motivoBase}
+                    notify={notify}
+                    onAlterado={() => setVersao(v => v + 1)}
+                />
+            ) : subAba === 'fornecedores' ? (
+                <PainelFornecedoresDoSindico
+                    identidade={identidade}
+                    condominioId={condominioId}
+                    motivoBase={motivoBase}
+                    notify={notify}
+                    onAlterado={() => setVersao(v => v + 1)}
+                />
+            ) : subAba === 'contratos' ? (
+                <PainelContratosDoSindico
+                    identidade={identidade}
+                    condominioId={condominioId}
+                    condominio={condominiosDaTela[0] ?? null}
                     motivoBase={motivoBase}
                     notify={notify}
                     onAlterado={() => setVersao(v => v + 1)}

@@ -140,3 +140,9 @@ Nenhum dos dois seguia a regra — tudo preso à org em que o link foi gerado:
   com `fn_pode_criar_pedido_em_alguma_de`. **Item 7 feito** — em produção: Tarefas, Pedido Fast e Diário `TUDO OK`.
   Caso do Iago: orgs Alpa (4 tarefas abertas visíveis, pode pedir, 16 obras) e Garden SPE (pode pedir, 2 obras) —
   as obras da Garden entram na lista do Pedido Fast pelo link. Item 6: CI do PR #790, merge, publicar a Edge.
+- 2026-11-27: **item 6 feito** — PR #790 mesclado com a CI verde (`58d1777`); produção conferida servindo `58d1777`;
+  CI da `main` 17/18 na 1ª rodada (`TowerEditorTerrenoDaPlanta` › "distância entre torres", sem relação com a mudança,
+  passou 3/3 local e no PR) e 18/18 na reexecução do job. Edge `pedido-fast` publicada pelo usuário da pasta da frente
+  (fontes idênticas à `main`); sondas no bundle publicado: sem Authorization → 401, chave anon sem usuário → 401
+  "Token inválido", token de link inválido → 403 "link inválido ou vencido" (recusa do banco). Não houve prova de pedido
+  real pelo link (sem token de ninguém). **Pedido 3: 3 de 3.**

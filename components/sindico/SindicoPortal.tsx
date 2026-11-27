@@ -4,7 +4,7 @@ import {
     Loader2, LogOut, Megaphone, Package, ShieldCheck, Vote, Wallet, Wrench,
 } from 'lucide-react';
 import {
-    KpiStrip, PortalCard, CardHeader, DetailField, fmtBRLCents, fmtDate, type KpiItem,
+    KpiStrip, PortalCard, CardHeader, DetailField, TextLinkButton, fmtBRLCents, fmtDate, type KpiItem,
 } from '../portal/PortalKit';
 import {
     competencia,
@@ -15,6 +15,7 @@ import { AbaUnidadesDoSindico } from './PainelMoradoresDoSindico';
 import PainelAvisosDoSindico from './PainelAvisosDoSindico';
 import PainelChamadosDoSindico from './PainelChamadosDoSindico';
 import PainelFinanceiroDoSindico from './PainelFinanceiroDoSindico';
+import FichaDoCondominioSheet from './FichaDoCondominioSheet';
 import PainelManutencaoDoSindico from './PainelManutencaoDoSindico';
 import PainelEquipamentosDoSindico from './PainelEquipamentosDoSindico';
 import PainelDocumentosDoSindico from './PainelDocumentosDoSindico';
@@ -229,7 +230,10 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                         </div>
                     ) : (
                         <div className="max-w-6xl mx-auto space-y-6">
-                            {aba === 'visao' && <PainelVisaoGeral dados={dados} onIr={setAba} />}
+                            {aba === 'visao' && (
+                                <PainelVisaoGeral dados={dados} onIr={setAba} identidade={identidade}
+                                    logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} onAlterado={recarregar} />
+                            )}
                             {/* G6 (26/11/2026): sub-abas Unidades e cotas / Moradores (cadastrar, contato, encerrar, convidar). */}
                             {aba === 'unidades' && (
                                 <AbaUnidadesDoSindico identidade={identidade} dados={dados}
@@ -322,7 +326,13 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
 };
 
 // ── Visão geral ─────────────────────────────────────────────────────────────
-const PainelVisaoGeral: React.FC<{ dados: PortalSindico; onIr: (aba: SindicoPortalTabId) => void }> = ({ dados, onIr }) => {
+const PainelVisaoGeral: React.FC<{
+    dados: PortalSindico; onIr: (aba: SindicoPortalTabId) => void;
+    /** G7 (26/11/2026): "Editar ficha" no cartão do condomínio. */
+    identidade: IdentidadeDoSindico; logado: boolean;
+    notify: (m: string, t?: 'success' | 'error') => void; onAlterado: () => void;
+}> = ({ dados, onIr, identidade, logado, notify, onAlterado }) => {
+    const [editandoFicha, setEditandoFicha] = React.useState<PortalSindico['condominios'][number] | null>(null);
     const hoje = hojeEmBrasilia();
     const ocupadas = dados.unidades.filter(u => u.ocupacoes.length > 0).length;
     const atraso = inadimplenciaDoPredio(dados.rateios, hoje);
@@ -343,7 +353,8 @@ const PainelVisaoGeral: React.FC<{ dados: PortalSindico; onIr: (aba: SindicoPort
             <KpiStrip items={kpis} />
             {dados.condominios.map(c => (
                 <PortalCard key={c.id}>
-                    <CardHeader title={c.nome} subtitle={c.codigo ? `Código ${c.codigo}` : undefined} />
+                    <CardHeader title={c.nome} subtitle={c.codigo ? `Código ${c.codigo}` : undefined}
+                        right={<TextLinkButton onClick={() => setEditandoFicha(c)}>Editar ficha</TextLinkButton>} />
                     <div className="px-5 pb-4 grid md:grid-cols-2 gap-x-10">
                         <div>
                             <DetailField label="Razão social">{c.razaoSocial || '—'}</DetailField>
@@ -389,6 +400,9 @@ const PainelVisaoGeral: React.FC<{ dados: PortalSindico; onIr: (aba: SindicoPort
                     </ul>
                 </PortalCard>
             </div>
+            <FichaDoCondominioSheet condominio={editandoFicha} identidade={identidade} logado={logado}
+                onClose={() => setEditandoFicha(null)}
+                onSalvo={m => { setEditandoFicha(null); notify(m); onAlterado(); }} />
         </>
     );
 };

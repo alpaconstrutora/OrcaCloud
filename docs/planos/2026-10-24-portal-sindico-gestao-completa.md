@@ -256,7 +256,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     não havia barra de abas (só a Visão geral) → a barra vai no pé do quadro.
   - [x] PR + CI + publicação — PR #161, squash `7408df3` (25/10/2026); CI de `main` verde;
     `conferir-producao.sh "Abrir o portal do síndico"` ✅.
-- [ ] **G3 — Fornecedores e contratos recorrentes** (usuário: "resolva as Pendências que continuam", 26/11/2026).
+- [x] **G3 — Fornecedores e contratos recorrentes** (usuário: "resolva as Pendências que continuam", 26/11/2026).
   Desenho: duas sub-abas novas do Financeiro (os cadastros do contrato — centros, contas financeiras, fornecedores — já
   vêm na leitura do Financeiro, por condomínio).
   - Fornecedores: listar o que a org do condomínio enxerga (dela ou disponibilizado por outra empresa — este só se
@@ -284,7 +284,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     vencidas"; 0 escrita, 0 erro, sem rolagem lateral. **O print achou:** as 3 leituras novas estavam STABLE e o
     resolvedor grava `last_used_at` do link → "cannot execute UPDATE in a read-only transaction" pelo link (a prova
     SQL, sem token, não passava por ali) → voláteis; e o contato repetia o telefone → uma vez só.
-  - [ ] PR + CI + publicação.
+  - [x] PR + CI + publicação — PR #782, todos os jobs verdes; squash `d445c3a`; CI de `main` no squash verde; domínio serve `d445c3a` (`conferir-producao.sh`).
 - [ ] **G4 — Manutenção e equipamentos** (mesmo pedido de 26/11/2026).
   Desenho: o app grava direto nas tabelas e a regra mora no banco (concluir a OS → `trg_maintenance_order_completed`
   recalcula o próximo vencimento do item; código patrimonial em `fn_opura_assets_codigo`; texto de marca/modelo em

@@ -45,10 +45,10 @@ vi.mock('../../components/TasksMobileApp', async () => {
 // O Diário de verdade é enorme; aqui basta quem recebe a fonte do link e a usa ao montar.
 vi.mock('../../components/celular/DiarioDoLink', async () => {
   const R = await import('react')
-  const Sonda: React.FC<{ fonte: { modo: string; podeAprovarNoLink: boolean | null; listarProjetos: () => Promise<unknown> } }> = ({ fonte }) => {
+  const Sonda: React.FC<{ fonte: { modo: string; listarProjetos: () => Promise<unknown> } }> = ({ fonte }) => {
     sondas.fontesDiario.push(fonte)
     R.useEffect(() => { fonte.listarProjetos().catch(() => { /* a tela real mostra o erro */ }) }, [fonte])
-    return R.createElement('div', { 'data-testid': 'tela-do-diario' }, `diário ${fonte.modo} aprova=${String(fonte.podeAprovarNoLink)}`)
+    return R.createElement('div', { 'data-testid': 'tela-do-diario' }, `diário ${fonte.modo}`)
   }
   return { default: Sonda }
 })
@@ -147,11 +147,11 @@ describe('CelularTokenGate', () => {
   })
 
   it('tocar "Diário" monta o Diário com a fonte do link; voltar a "Tarefas" traz as tarefas', async () => {
-    responder({ celular_sessao: () => ok({ ...SESSAO, pode_aprovar_diario: true }) })
+    responder({ celular_sessao: () => ok(SESSAO) })
     render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
     fireEvent.click(screen.getByRole('tab', { name: 'Diário' }))
-    expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('diário link aprova=true')
+    expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('diário link')
     expect(screen.queryByTestId('tela-de-tarefas')).toBeNull()
     expect(screen.getByRole('tab', { name: 'Diário' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: 'Tarefas' })).toHaveAttribute('aria-selected', 'false')
@@ -161,12 +161,13 @@ describe('CelularTokenGate', () => {
     expect(screen.getByRole('tab', { name: 'Tarefas' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('sessão com pode_aprovar_diario=false: a fonte do Diário diz que não aprova', async () => {
-    responder({ celular_sessao: () => ok(SESSAO) })
+  it('a fonte do Diário não depende do pode_aprovar_diario da sessão (aprovar segue o diário aberto)', async () => {
+    responder({ celular_sessao: () => ok({ ...SESSAO, pode_aprovar_diario: true }) })
     render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
     fireEvent.click(screen.getByRole('tab', { name: 'Diário' }))
-    expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('aprova=false')
+    await screen.findByTestId('tela-do-diario')
+    expect('podeAprovarNoLink' in (sondas.fontesDiario[0] as object)).toBe(false)
   })
 
   it('a fonte do Diário é a mesma entre renders (não recarrega em laço)', async () => {

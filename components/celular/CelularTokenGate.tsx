@@ -72,16 +72,17 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   // ⚠️ As fontes PRECISAM ser estáveis: `TasksMobileApp` e `DiaryMobileApp` as têm nas
   // dependências dos efeitos que carregam os dados. `fonteDoLink(token)` solto no JSX
   // criaria um objeto novo a cada render do gate e a tela recarregaria em laço. Por isso
-  // só `token` (e, no Diário, o `pode_aprovar_diario` da sessão — um booleano) nas deps.
+  // só `token` nas deps.
   const fonte = React.useMemo(() => fonteDoLink(token, { aoRecusar }), [token, aoRecusar])
 
   // Mesma regra de estabilidade: `PedidoFastFluxo` tem a fonte na dependência da leitura.
   const fontePedido = React.useMemo(() => fontePedidoFastDoLink(token, { aoRecusar }), [token, aoRecusar])
 
-  const podeAprovarDiario = estado.tipo === 'ok' ? estado.sessao.pode_aprovar_diario === true : false
+  // Aprovar no Diário segue a organização DO DIÁRIO aberto (`celular_diario_abrir` →
+  // `pode_aprovar`), não a do link: o link abre diários de todas as orgs do dono.
   const fonteDiario = React.useMemo(
-    () => fonteDiarioDoLink(token, { aoRecusar, podeAprovar: podeAprovarDiario }),
-    [token, aoRecusar, podeAprovarDiario],
+    () => fonteDiarioDoLink(token, { aoRecusar }),
+    [token, aoRecusar],
   )
 
   React.useEffect(() => {

@@ -33,7 +33,7 @@ import type { DiarioFonteDoLink } from '../../services/celular/diarioFonte'
 const LISTA = [{ id: 'd1', name: 'Obra A', settings: {} }, { id: 'd2', name: 'Obra B', settings: {} }]
 
 function fonteCom(listarProjetos: () => Promise<unknown>): DiarioFonteDoLink {
-  return { modo: 'link', podeAprovarNoLink: false, listarProjetos } as unknown as DiarioFonteDoLink
+  return { modo: 'link', listarProjetos } as unknown as DiarioFonteDoLink
 }
 
 beforeEach(() => {

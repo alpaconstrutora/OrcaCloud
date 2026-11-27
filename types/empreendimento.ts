@@ -95,6 +95,9 @@ export interface Empreendimento {
     /** Organização que OPERA o condomínio (21/10/2026). NULL = a do empreendimento.
      *  Use `utils/orgDoCondominio`, nunca `organization_id`, nas telas do condomínio. */
     condominio_org_id?: string | null;
+    /** Conta do condomínio (27/11/2026): lançamento NOVO na org do condomínio que chega sem
+     *  conta recebe esta (gatilho `trg_condominio_conta_padrao`). Grava pela Ficha. */
+    condominio_payment_account_id?: string | null;
     sindico_mandato_inicio?: string | null;
     /** Mandato tem fim, e síndico vencido não representa o condomínio. */
     sindico_mandato_fim?: string | null;

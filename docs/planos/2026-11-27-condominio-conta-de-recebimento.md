@@ -41,5 +41,55 @@ qual conta Asaas o condomínio vai usar (ou avisa que não há nenhuma, com o at
 - [x] `FinanceiroTab`: faixa + Emitir desligado com o motivo; `condominioContaDeRecebimento.test` (2): sem conta
   (faixa, botão desligado com o mesmo motivo, atalho para Contas) e conta emprestada em sandbox. tsc 0;
   `check-ui-standard` 0.
+- [x] PR + CI + publicação — PR #788, todos os jobs verdes (o leve caiu 1× em `PortalHelpSettings`, de outro módulo, passou 3/3 local e na nova rodada); squash `c418db6`; CI de `main` verde; domínio serve `c418db6`.
+- [ ] Conferir na tela publicada (Bella Vista › Financeiro): a faixa "Nenhuma conta Asaas…" com "Cadastrar conta" (Chrome desconectado em 27/11).
+
+---
+
+## 2ª parte — campo para ESCOLHER a conta (27/11/2026, mesma sessão)
+
+A 1ª parte respondeu outra coisa: mostrava a conta, não deixava escolher. Pedidos, literais:
+
+> Vou fazer a mesma pergunta novamente. Aonde no comercial > condominio eu seleciono a conta para transações?
+
+> a pergunta e a mesma!
+
+> o que diabos entao voce implementou?
+
+> Vou te pedir novamente e voce vai me dizer o que voce entendeu,
+> Desfaça o que voce fez.
+> depois em comercial > condominio : voce vai emprementar um campo para eu selecionar uma conta que ja existe cadastrada em minhas > organizaçào > contas .
+>
+> isso ja foi implementado inumeras vezes por todo app. Campo para selecionar uma conta. Nao estou entendendo por que voce se confundiu duas vezes
+
+Respondi o que entendi e perguntei onde fica o campo e para que serve a conta:
+
+> 1. mantenha #788.
+> 2. sim
+> 1. Onde fica o campo: na ficha do condomínio.
+> 2. Para que serve a conta: vale para tudo do condomínio
+
+### Desenho
+
+- `empreendimentos.condominio_payment_account_id`; campo "Conta" na Ficha (seção "Conta do condomínio"), `<select>`
+  com as contas de Minha Organização › Contas que o usuário enxerga, agrupadas por organização (mesmo serviço do
+  campo "Conta" do centro de custo, `listPaymentAccounts`). Achado: os lançamentos dos condomínios JÁ usam contas de
+  outras orgs (Sicredi da Alpa, Itaú do Altair, Sicredi do Garden) e as orgs dos condomínios não têm conta própria —
+  listar só as da org do condomínio daria lista vazia.
+- Grava por `condominio_salvar_ficha`. Conta de outra org passa a atender a org do condomínio
+  (`payment_account_organizations`): sem isso o Portal do Síndico e a emissão recusariam a conta.
+- "Vale para tudo": gatilho `trg_condominio_conta_padrao` (BEFORE INSERT em `internal_transactions`) — lançamento NOVO
+  na org do condomínio sem conta recebe a do condomínio. Só na org do condomínio (o centro de custo pode estar no
+  mesmo empreendimento da obra). Conta escolhida não é tocada; lançamentos antigos não mudam.
+
+### Itens
+
+- [x] Migration `aplicar_20271127950100_condominio_conta_da_ficha` APLICADA (27/11). Prova em bloco desfeito (14/14):
+  de fora, conta inativa e valor inválido recusados; salvar o Sicredi da Alpa grava e cria o vínculo; cota com o
+  centro de custo do condomínio e lançamento sem centro → Sicredi; conta escolhida (Itaú) mantida; lançamento na org
+  da construtora sem conta continua sem; "Nenhuma" limpa; multa intacta. ACL: a função do gatilho sem
+  `authenticated`/`anon`.
+- [x] Tela: campo na Ficha (desligado com o motivo quando o condomínio não tem org própria); `utils/contaDoCondominio.ts`
+  (`contaDoCondominio.test`, 2); `condominioFichaConta.test` (2). Testes do condomínio 19 arquivos / 299 verdes.
+  tsc 0; `check-ui-standard` 0.
 - [ ] PR + CI + publicação.
-- [ ] Conferir na tela publicada (Bella Vista › Financeiro): a faixa "Nenhuma conta Asaas…" com "Cadastrar conta".

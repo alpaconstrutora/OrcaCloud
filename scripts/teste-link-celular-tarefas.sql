@@ -6,8 +6,12 @@
 --             autorização (*_de), gestão do link (mobile_link_*: gestor só
 --             gera para `member`) e o gatilho que revoga o link ao sair da org.
 --   Seção B — RPCs de Tarefas do link (celular_*), chamadas como anon só com
---             o token da seção A: mesma visibilidade da RLS, presa à org do link;
---             lista branca de escrita; recusas 42501/22023.
+--             o token da seção A: mesma visibilidade da RLS nas orgs de que o dono
+--             é membro; lista branca de escrita; recusas 42501/22023.
+--   Seção D — (aplicar_20271127200000) o link vale para TODAS as orgs de que o
+--             dono é membro: sessão com `orgs`, lista/espaços/status/responsáveis da
+--             outra org, criar com org_id (ou pelo espaço), editar pela org da tarefa;
+--             deixar de ser membro tira a org do link.
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';
 -- sucesso = a linha final 'TUDO OK' (`db query` só devolve o último resultado).
@@ -532,14 +536,14 @@ BEGIN
     UPDATE public.tasks SET project_id = p_o    WHERE id = t_own;
     UPDATE public.tasks SET project_id = p_fora WHERE id = t_espaco;
 
-    -- ── celular_tarefas_listar = o que a RLS entrega a u, na org do link ─────
-    ref := pg_temp.como(u, 'authenticated', format(
+    -- ── celular_tarefas_listar = o que a RLS entrega a u, nas orgs de que ele é membro ─
+    ref := pg_temp.como(u, 'authenticated',
         'SELECT coalesce(string_agg(s.id::text, '','' ORDER BY s.id), '''') FROM ('
-        || 'SELECT t.id FROM public.tasks t WHERE t.org_id = %L AND ' || filtro_aberta
-        || ' ORDER BY t.due_date ASC NULLS LAST, t.priority ASC, t.id LIMIT 300) s', o));
+        || 'SELECT t.id FROM public.tasks t WHERE t.org_id IN (SELECT public.minhas_orgs_membro()) AND ' || filtro_aberta
+        || ' ORDER BY t.due_date ASC NULLS LAST, t.priority ASC, t.id LIMIT 300) s');
     v := pg_temp.cel(format('SELECT pg_temp.ids(public.celular_tarefas_listar(%L)->''tarefas'')', tk));
     PERFORM pg_temp.confere(ref LIKE 'ok:%' AND v = ref,
-        'listar (anon + token) = SELECT em tasks com as claims de u na org do link (RLS: ' || ref || ' / RPC: ' || v || ')');
+        'listar (anon + token) = SELECT em tasks com as claims de u nas orgs dele (RLS: ' || ref || ' / RPC: ' || v || ')');
     PERFORM pg_temp.confere(strpos(v, t_own::text) > 0 AND strpos(v, t_espaco::text) > 0
                         AND strpos(v, t_sempasta::text) > 0 AND strpos(v, t_colab::text) > 0,
         'listar traz as próprias (fora e dentro do espaço de u) e a em que u é colaborador');
@@ -619,7 +623,9 @@ BEGIN
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, ''{"description":"sem título"}'')::text', tk));
     PERFORM pg_temp.confere(v LIKE '22023:%', 'criar sem título → 22023 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'org_id', o2)));
-    PERFORM pg_temp.confere(v LIKE '22023:%', 'criar com org_id no payload → 22023 (veio ' || v || ')');
+    -- org_id é aceito desde aplicar_20271127200000 (a tela pergunta a org); de org de que u
+    -- não é membro, recusa.
+    PERFORM pg_temp.confere(v = '42501:organização fora do seu acesso', 'criar com org_id de org de que u não é membro → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'user_id', m)));
     PERFORM pg_temp.confere(v LIKE '22023:%', 'criar com user_id no payload → 22023 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, ''{"title":"LC x","status":"done"}'')::text', tk));
@@ -699,16 +705,19 @@ BEGIN
                         AND (j->>'nome') IS NOT DISTINCT FROM (SELECT name FROM public.profiles WHERE id = u)
                         AND (j->>'org_nome') = (SELECT name FROM public.organizations WHERE id = o)
                         -- pode_aprovar_diario: acrescentado pela Parte 2 (aplicar_20271112960000).
+                        -- orgs: acrescentado em aplicar_20271127200000 (o link vale para todas).
                         AND (SELECT string_agg(k, ',' ORDER BY k) FROM jsonb_object_keys(j) k)
-                            IN ('nome,org_id,org_nome,user_id', 'nome,org_id,org_nome,pode_aprovar_diario,user_id'),
-        'sessao = {user_id, nome, org_id, org_nome[, pode_aprovar_diario]} do dono do link (veio ' || v || ')');
+                            = 'nome,org_id,org_nome,orgs,pode_aprovar_diario,user_id'
+                        AND (SELECT string_agg(e->>'id', ',' ORDER BY e->>'id') FROM jsonb_array_elements(j->'orgs') e)
+                            = (SELECT string_agg(x::text, ',' ORDER BY x::text) FROM public._celular_orgs_do_usuario(u) x),
+        'sessao = {user_id, nome, org_id, org_nome, pode_aprovar_diario, orgs = as de u} do dono do link (veio ' || v || ')');
 
-    -- ── celular_espacos_listar = task_spaces que a RLS entrega a u, na org do link
-    ref := pg_temp.como(u, 'authenticated', format(
-        'SELECT coalesce(string_agg(s.id::text, '','' ORDER BY s.id), '''') FROM public.task_spaces s WHERE s.org_id = %L', o));
+    -- ── celular_espacos_listar = task_spaces que a RLS entrega a u, nas orgs dele
+    ref := pg_temp.como(u, 'authenticated',
+        'SELECT coalesce(string_agg(s.id::text, '','' ORDER BY s.id), '''') FROM public.task_spaces s WHERE s.org_id IN (SELECT public.minhas_orgs_membro())');
     v := pg_temp.cel(format('SELECT pg_temp.ids(public.celular_espacos_listar(%L))', tk));
     PERFORM pg_temp.confere(ref LIKE 'ok:%' AND v = ref,
-        'espaços (anon + token) = SELECT em task_spaces com as claims de u na org (RLS: ' || ref || ' / RPC: ' || v || ')');
+        'espaços (anon + token) = SELECT em task_spaces com as claims de u nas orgs dele (RLS: ' || ref || ' / RPC: ' || v || ')');
     PERFORM pg_temp.confere(strpos(v, s_u::text) > 0 AND strpos(v, s_u2::text) > 0
                         AND strpos(v, s_m::text) = 0 AND strpos(v, s_o2::text) = 0,
         'espaços: os de u em o sim; o sem u e o de outra org não');
@@ -726,12 +735,12 @@ BEGIN
     PERFORM pg_temp.confere('ok:' || (j->>'open_task_count') = ref,
         'open_task_count = abertas do espaço que a RLS entrega a u (RLS: ' || ref || ' / RPC: ' || (j->>'open_task_count') || ')');
 
-    -- ── celular_status_listar = task_statuses da org do link ─────────────────
-    ref := pg_temp.como(u, 'authenticated', format(
-        'SELECT coalesce(string_agg(s.id::text, '','' ORDER BY s.id), '''') FROM public.task_statuses s WHERE s.org_id = %L', o));
+    -- ── celular_status_listar = task_statuses das orgs de u ──────────────────
+    ref := pg_temp.como(u, 'authenticated',
+        'SELECT coalesce(string_agg(s.id::text, '','' ORDER BY s.id), '''') FROM public.task_statuses s WHERE s.org_id IN (SELECT public.minhas_orgs_membro())');
     v := pg_temp.cel(format('SELECT pg_temp.ids(public.celular_status_listar(%L))', tk));
     PERFORM pg_temp.confere(ref LIKE 'ok:%' AND v = ref AND strpos(v, st_done::text) > 0 AND strpos(v, st_o2::text) = 0,
-        'status = os da org do link, nenhum de outra (RLS: ' || ref || ' / RPC: ' || v || ')');
+        'status = os das orgs de u, nenhum de org de que ele não é membro (RLS: ' || ref || ' / RPC: ' || v || ')');
     PERFORM pg_temp.confere((SELECT string_agg(k, ',' ORDER BY k) FROM jsonb_object_keys(public.celular_status_listar(tk)->0) k)
                             = 'color,id,is_default,is_done,name,org_id,position',
         'status com as colunas de taskStatusService.list');
@@ -750,24 +759,27 @@ BEGIN
     PERFORM pg_temp.confere((SELECT string_agg(k, ',' ORDER BY k) FROM jsonb_object_keys(public.celular_responsaveis_listar(tk)->0) k) = 'id,name',
         'responsáveis no formato [{id, name}]');
 
-    -- ── token de outra org não enxerga nada de o ─────────────────────────────
-    -- Par (w, ow) com ow <> o e w membro de ow; de preferência o próprio u.
+    -- ── token de quem NÃO é membro de o não enxerga nada de o ────────────────
+    -- Par (w, ow) com ow <> o, w membro de ow e NÃO membro de o (desde 27/11 o link vale
+    -- para todas as orgs do dono: um membro de o enxergaria o, e deve).
     SELECT om.user_id, om.organization_id INTO w, ow
       FROM public.organization_members om JOIN auth.users au ON au.id = om.user_id
      WHERE om.organization_id <> o AND public.is_org_member_de(om.user_id, om.organization_id)
-     ORDER BY (om.user_id = u) DESC, om.organization_id, om.user_id LIMIT 1;
-    PERFORM pg_temp.confere(w IS NOT NULL, 'fixture: membro de outra org');
+       AND NOT public.is_org_member_de(om.user_id, o)
+     ORDER BY om.organization_id, om.user_id LIMIT 1;
+    PERFORM pg_temp.confere(w IS NOT NULL, 'fixture: membro de outra org que não é de o');
     v := pg_temp.como(w, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', w, ow));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'link de outra org gerado (veio ' || v || ')');
     tk2 := substr(v, 4);
     j := public.celular_tarefas_listar(tk2);
-    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(j->'tarefas') e WHERE (e->>'org_id')::uuid <> ow),
-        'token de outra org: só tarefas daquela org');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(j->'tarefas') e WHERE NOT public.is_org_member_de(w, (e->>'org_id')::uuid)),
+        'token de outra org: só tarefas das orgs de w');
     PERFORM pg_temp.confere(strpos(pg_temp.ids(j->'tarefas'), t_sempasta::text) = 0 AND strpos(pg_temp.ids(j->'tarefas'), t_colab::text) = 0,
         'token de outra org: nada de o');
-    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(public.celular_espacos_listar(tk2)) e WHERE (e->>'org_id')::uuid <> ow)
-                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(public.celular_status_listar(tk2)) e WHERE (e->>'org_id')::uuid <> ow),
-        'token de outra org: espaços e status só daquela org');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(public.celular_espacos_listar(tk2)) e WHERE NOT public.is_org_member_de(w, (e->>'org_id')::uuid))
+                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(public.celular_status_listar(tk2)) e WHERE NOT public.is_org_member_de(w, (e->>'org_id')::uuid))
+                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(public.celular_status_listar(tk2)) e WHERE (e->>'org_id')::uuid = o),
+        'token de outra org: espaços e status só das orgs de w, nada de o');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, ''{"title":"LC x"}'')::text', tk2, t_sempasta));
     PERFORM pg_temp.confere(v LIKE '42501:%', 'token de outra org não edita tarefa de o (veio ' || v || ')');
 
@@ -800,7 +812,7 @@ BEGIN
                           'public.celular_tarefas_listar(text, uuid, uuid, boolean)'::regprocedure,
                           'public.celular_espacos_listar(text)'::regprocedure,
                           'public.celular_status_listar(text)'::regprocedure,
-                          'public.celular_responsaveis_listar(text)'::regprocedure,
+                          'public.celular_responsaveis_listar(text, uuid)'::regprocedure,
                           'public.celular_tarefa_criar(text, jsonb)'::regprocedure,
                           'public.celular_tarefa_atualizar(text, uuid, jsonb)'::regprocedure)),
         'celular_* da Parte 1 (7): anon e authenticated executam; SECURITY DEFINER, VOLATILE, search_path = public, pg_temp');
@@ -814,6 +826,95 @@ BEGIN
               AND count(*) > 0
            FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.proname LIKE '\_celular\_%'),
         'internos _celular_*: sem EXECUTE para anon nem authenticated');
+END $$;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Seção D — o link vale para TODAS as orgs de que o dono é membro
+-- (aplicar_20271127200000; plano docs/planos/2026-11-27-diario-link-todas-orgs.md)
+-- ═════════════════════════════════════════════════════════════════════════════
+-- u entra numa org o3 (só nesta transação). O link dele continua sendo o da org o.
+DO $$
+DECLARE
+    ctx RECORD;
+    u UUID; o UUID; o2 UUID; o3 UUID; tk TEXT;
+    s3 UUID; t3 UUID; st3 UUID; st_o UUID; e3 UUID;
+    v TEXT; j JSONB;
+    sem_org CONSTANT TEXT := '42501:organização fora do seu acesso';
+    criar CONSTANT TEXT := 'SELECT public.celular_tarefa_criar(%L, %L::jsonb)->>''org_id''';
+    atual CONSTANT TEXT := 'SELECT public.celular_tarefa_atualizar(%L, %L, %L::jsonb)::text';
+BEGIN
+    SELECT * INTO ctx FROM lc_ctx;
+    u := ctx.u; o := ctx.o; o2 := ctx.o2; tk := ctx.token;
+
+    -- ── fixtures ─────────────────────────────────────────────────────────────
+    SELECT org.id INTO o3 FROM public.organizations org
+     WHERE org.id NOT IN (o, o2) AND NOT public.is_org_member_de(u, org.id)
+     ORDER BY org.id DESC LIMIT 1;
+    PERFORM pg_temp.confere(o3 IS NOT NULL, 'fixture D: org o3 sem u');
+    INSERT INTO public.organization_members (organization_id, user_id, email, role)
+    VALUES (o3, u, (SELECT email FROM auth.users WHERE id = u), 'member');
+    INSERT INTO public.task_spaces (org_id, owner_user_id, name) VALUES (o3, u, 'LD espaço de o3') RETURNING id INTO s3;
+    -- O dono entra como membro do espaço pelo gatilho da criação.
+    PERFORM pg_temp.confere(public.is_task_space_member_de(u, s3), 'fixture D: u membro do espaço s3');
+    INSERT INTO public.tasks (org_id, user_id, title, status, priority) VALUES (o3, u, 'LD tarefa de u em o3', 'open', 3) RETURNING id INTO t3;
+    INSERT INTO public.task_statuses (org_id, name) VALUES (o3, 'LD status de o3') RETURNING id INTO st3;
+    SELECT ts.id INTO st_o FROM public.task_statuses ts WHERE ts.org_id = o ORDER BY ts.position, ts.id LIMIT 1;
+    PERFORM pg_temp.confere(st_o IS NOT NULL, 'fixture D: um status da org do link');
+    INSERT INTO public.employees (org_id, name, status) VALUES (o3, 'LD responsável de o3', 'ATIVO') RETURNING id INTO e3;
+
+    -- ── sessão: orgs inclui o e o3 ───────────────────────────────────────────
+    j := substr(pg_temp.cel(format('SELECT public.celular_sessao(%L)::text', tk)), 4)::jsonb;
+    PERFORM pg_temp.confere((j->>'org_id')::uuid = o
+                        AND EXISTS (SELECT 1 FROM jsonb_array_elements(j->'orgs') e WHERE (e->>'id')::uuid = o3)
+                        AND EXISTS (SELECT 1 FROM jsonb_array_elements(j->'orgs') e WHERE (e->>'id')::uuid = o)
+                        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(j->'orgs') e WHERE (e->>'id')::uuid = o2),
+        'D sessão: org do link segue o; orgs traz o e o3, não o2 (veio ' || j::text || ')');
+
+    -- ── leitura da outra org ─────────────────────────────────────────────────
+    PERFORM pg_temp.confere(strpos(pg_temp.ids(public.celular_tarefas_listar(tk)->'tarefas'), t3::text) > 0,
+        'D listar traz a tarefa de u em o3');
+    PERFORM pg_temp.confere(strpos(pg_temp.ids(public.celular_espacos_listar(tk)), s3::text) > 0,
+        'D espaços traz o espaço de o3');
+    PERFORM pg_temp.confere(strpos(pg_temp.ids(public.celular_status_listar(tk)), st3::text) > 0,
+        'D status traz os de o3');
+    v := pg_temp.cel(format('SELECT pg_temp.ids(public.celular_responsaveis_listar(%L, %L))', tk, o3));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND strpos(v, e3::text) > 0, 'D responsáveis de o3 (veio ' || v || ')');
+    v := pg_temp.cel(format('SELECT public.celular_responsaveis_listar(%L, %L)::text', tk, o2));
+    PERFORM pg_temp.confere(v = sem_org, 'D responsáveis de o2 (u não é membro) → 42501 (veio ' || v || ')');
+
+    -- ── criar ────────────────────────────────────────────────────────────────
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD nova sem espaço', 'org_id', o3)));
+    PERFORM pg_temp.confere(v = 'ok:' || o3, 'D criar sem espaço com org_id = o3 → nasce em o3 (veio ' || v || ')');
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD sem org_id')));
+    PERFORM pg_temp.confere(v = 'ok:' || o, 'D criar sem espaço e sem org_id → org do link (front antigo) (veio ' || v || ')');
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD em o2', 'org_id', o2)));
+    PERFORM pg_temp.confere(v = sem_org, 'D criar com org_id de org de que u não é membro → 42501 (veio ' || v || ')');
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD no espaço de o3', 'space_id', s3)));
+    PERFORM pg_temp.confere(v = 'ok:' || o3, 'D criar no espaço de o3 → nasce em o3 (veio ' || v || ')');
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD espaço x org', 'space_id', s3, 'org_id', o)));
+    PERFORM pg_temp.confere(v = '22023:o espaço é de outra organização', 'D espaço de o3 com org_id = o → 22023 (veio ' || v || ')');
+
+    -- ── atualizar pela org DA TAREFA ─────────────────────────────────────────
+    v := pg_temp.cel(format(atual, tk, t3, jsonb_build_object('status_id', st3, 'assignee_employee_id', e3)));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (SELECT status_id = st3 AND assignee_employee_id = e3 FROM public.tasks WHERE id = t3),
+        'D atualizar tarefa de o3 com status e responsável de o3 (veio ' || v || ')');
+    v := pg_temp.cel(format(atual, tk, t3, jsonb_build_object('status_id', st_o)));
+    PERFORM pg_temp.confere(v = '42501:status de outra organização', 'D status da org do link numa tarefa de o3 → 42501 (veio ' || v || ')');
+
+    -- ── deixa de ser membro de o3 ────────────────────────────────────────────
+    DELETE FROM public.organization_members WHERE organization_id = o3 AND user_id = u;
+    v := pg_temp.cel(format('SELECT pg_temp.ids(public.celular_tarefas_listar(%L)->''tarefas'')', tk));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND strpos(v, t3::text) = 0,
+        'D ex-membro de o3: o link segue valendo e a tarefa de o3 sai (veio ' || left(v, 120) || ')');
+    PERFORM pg_temp.confere(strpos(pg_temp.ids(public.celular_espacos_listar(tk)), s3::text) = 0
+                        AND strpos(pg_temp.ids(public.celular_status_listar(tk)), st3::text) = 0,
+        'D ex-membro de o3: espaço e status de o3 saem');
+    v := pg_temp.cel(format(atual, tk, t3, '{"title": "LD x"}'));
+    PERFORM pg_temp.confere(v = '42501:tarefa não encontrada ou sem permissão para editar', 'D ex-membro não edita tarefa de o3 (veio ' || v || ')');
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD x', 'org_id', o3)));
+    PERFORM pg_temp.confere(v = sem_org, 'D ex-membro não cria em o3 (veio ' || v || ')');
+    v := pg_temp.cel(format(criar, tk, jsonb_build_object('title', 'LD x', 'space_id', s3)));
+    PERFORM pg_temp.confere(v = '42501:sem acesso a este espaço', 'D ex-membro não cria no espaço de o3 (veio ' || v || ')');
 END $$;
 
 ROLLBACK;

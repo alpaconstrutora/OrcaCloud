@@ -10,6 +10,9 @@
 --      nas duas funções;
 --   5. celular_obras_listar (como anon) → só OBRA da org do link, sem projeto de sistema
 --      nem orçamento, nem obra de outra org.
+--   6. (aplicar_20271127200000) o link vale para TODAS as orgs de que o dono é membro:
+--      membro de o2 com Compras lá → obras de o2 aparecem; sem Compras na org do link
+--      mas com em o2 → autoriza e lista só as de o2; sem Compras em nenhuma → recusa.
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';
 -- sucesso = a linha final 'TUDO OK' (`db query` só devolve o último resultado).
@@ -66,6 +69,7 @@ DECLARE
     o2    UUID;
     m     UUID;
     m_id  UUID;
+    m2_id UUID;
     tk    TEXT;
     v     TEXT;
     ob    UUID;
@@ -75,13 +79,19 @@ DECLARE
     autoriza CONSTANT TEXT := 'SELECT (SELECT row(a.user_id, a.org_id, a.email)::text FROM public._celular_pedido_fast_autoriza(%L, %L) a)';
     obras    CONSTANT TEXT := 'SELECT coalesce(string_agg(o.id::text, '','' ORDER BY o.id), '''') FROM public.celular_obras_listar(%L) o';
 BEGIN
-    -- Membro (papel 'member', com login) de uma org; outra org qualquer.
+    -- Membro (papel 'member', com login) de uma org; outra org de que ele não é membro.
     SELECT om.organization_id, om.user_id, om.id INTO org, m, m_id
       FROM public.organization_members om
      WHERE om.role = 'member' AND om.user_id IS NOT NULL
+       -- member em TODAS as orgs dele (owner/admin sempre podem pedir, e a prova desliga Compras)
+       AND NOT EXISTS (SELECT 1 FROM public.organization_members x
+                        WHERE x.user_id = om.user_id AND x.role IN ('owner', 'admin'))
+     ORDER BY om.id
      LIMIT 1;
     PERFORM pg_temp.confere(m IS NOT NULL, 'massa: um member com login');
-    SELECT o.id INTO o2 FROM public.organizations o WHERE o.id <> org LIMIT 1;
+    SELECT o.id INTO o2 FROM public.organizations o
+     WHERE o.id <> org AND NOT public.is_org_member_de(m, o.id) ORDER BY o.id LIMIT 1;
+    PERFORM pg_temp.confere(o2 IS NOT NULL, 'massa: org o2 de que m não é membro');
 
     -- Acesso a Compras ligado no membro (o padrão também liga, mas a matriz da org poderia barrar).
     UPDATE public.organization_members SET permissions = coalesce(permissions, '{}'::jsonb) || '{"canViewOrders": true}'::jsonb WHERE id = m_id;
@@ -124,8 +134,24 @@ BEGIN
     PERFORM pg_temp.confere(position(sis::text IN v) = 0, 'Gestão Comercial não aparece');
     PERFORM pg_temp.confere(position(fora::text IN v) = 0, 'obra de outra org não aparece');
 
-    -- 4. Sem acesso a Compras.
-    UPDATE public.organization_members SET permissions = permissions || '{"canViewOrders": false}'::jsonb WHERE id = m_id;
+    -- 6. m entra em o2 com Compras: o link (gerado na org) passa a valer para as duas.
+    INSERT INTO public.organization_members (organization_id, user_id, email, role, permissions)
+    VALUES (o2, m, (SELECT email FROM auth.users WHERE id = m), 'member', '{"canViewOrders": true}'::jsonb)
+    RETURNING id INTO m2_id;
+    v := pg_temp.como(NULL, 'anon', format(obras, tk));
+    PERFORM pg_temp.confere(position(ob::text IN v) > 0 AND position(fora::text IN v) > 0,
+        'membro de o2: obras da org do link E de o2 (veio ' || v || ')');
+    -- Compras desligado em TODAS as orgs de m menos o2 (a da prova e as reais dele).
+    UPDATE public.organization_members SET permissions = coalesce(permissions, '{}'::jsonb) || '{"canViewOrders": false}'::jsonb
+     WHERE id <> m2_id AND (user_id = m OR (user_id IS NULL AND lower(email) = (SELECT lower(email) FROM auth.users WHERE id = m)));
+    v := pg_temp.direto(format(autoriza, tk, 'criar'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'sem Compras na org do link, com Compras em o2: autoriza (veio ' || v || ')');
+    v := pg_temp.como(NULL, 'anon', format(obras, tk));
+    PERFORM pg_temp.confere(position(ob::text IN v) = 0 AND position(fora::text IN v) > 0,
+        'sem Compras na org do link: só as obras de o2 (veio ' || v || ')');
+
+    -- 4. Sem acesso a Compras em nenhuma das orgs.
+    UPDATE public.organization_members SET permissions = permissions || '{"canViewOrders": false}'::jsonb WHERE id = m2_id;
     v := pg_temp.direto(format(autoriza, tk, 'ler'));
     PERFORM pg_temp.confere(v = '42501:sem acesso a Pedidos de Compra', 'sem Compras recusa a autorização: ' || v);
     v := pg_temp.como(NULL, 'anon', format(obras, tk));

@@ -62,7 +62,7 @@ describe('fonteDoLink', () => {
     expect(r).toEqual({ id: 't1', status: 'done' })
   })
 
-  it('criarTarefa NÃO envia orgId no p_dados (a RPC recusa chave estranha)', async () => {
+  it('criarTarefa envia a org escolhida como org_id (o link vale para todas as orgs do dono)', async () => {
     mocks.rpc.mockResolvedValue(ok({ id: 'nova' }))
     await fonteDoLink('tk').criarTarefa({
       orgId: 'org-x', title: 'Comprar cimento', description: null, start_date: null,
@@ -71,27 +71,26 @@ describe('fonteDoLink', () => {
     expect(mocks.rpc).toHaveBeenCalledWith('celular_tarefa_criar', {
       p_token: 'tk',
       p_dados: {
-        title: 'Comprar cimento', description: null, start_date: null,
+        org_id: 'org-x', title: 'Comprar cimento', description: null, start_date: null,
         due_date: '2026-11-12T15:00:00.000Z', priority: 2, space_id: 's', folder_id: null,
       },
     })
     const dados = mocks.rpc.mock.calls[0][1].p_dados
     expect(Object.keys(dados)).not.toContain('orgId')
-    expect(Object.keys(dados)).not.toContain('org_id')
   })
 
-  it('espaços, status e responsáveis vão pelas RPCs com o token', async () => {
+  it('espaços, status e responsáveis vão pelas RPCs com o token; responsáveis pela org da tarefa', async () => {
     mocks.rpc.mockResolvedValueOnce(ok([{ id: 'sp1' }]))
     mocks.rpc.mockResolvedValueOnce(ok([{ id: 'st1' }]))
     mocks.rpc.mockResolvedValueOnce(ok([{ id: 'e1', name: 'Ana' }]))
     const f = fonteDoLink('tk')
     expect(await f.listarEspacos('qualquer')).toEqual([{ id: 'sp1' }])
     expect(await f.listarStatus('qualquer')).toEqual([{ id: 'st1' }])
-    expect(await f.listarResponsaveis('qualquer')).toEqual([{ id: 'e1', name: 'Ana' }])
+    expect(await f.listarResponsaveis('org-da-tarefa')).toEqual([{ id: 'e1', name: 'Ana' }])
     expect(mocks.rpc.mock.calls).toEqual([
       ['celular_espacos_listar',      { p_token: 'tk' }],
       ['celular_status_listar',       { p_token: 'tk' }],
-      ['celular_responsaveis_listar', { p_token: 'tk' }],
+      ['celular_responsaveis_listar', { p_token: 'tk', p_org: 'org-da-tarefa' }],
     ])
   })
 

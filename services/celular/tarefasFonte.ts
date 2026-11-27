@@ -66,7 +66,7 @@ export type PatchTarefa = Partial<Pick<Task,
 
 export interface TarefasFonte {
   modo: 'logado' | 'link'
-  /** `orgId` filtra só na fonte logada; no link a organização é a do token. */
+  /** `orgId` filtra só na fonte logada; no link vêm as de todas as organizações do dono. */
   listarTarefas(orgId: string | undefined, escopo: EscopoTarefas | null, limite: number):
     Promise<{ tarefas: Task[]; nomesObras: Map<string, string> }>
   listarEspacos(orgId: string | undefined): Promise<TaskSpaceWithMeta[]>
@@ -191,7 +191,7 @@ export function fonteDoLink(token: string, opcoes?: OpcoesFonteDoLink): TarefasF
   return {
     modo: 'link',
 
-    // `orgId` e `limite` não entram: a organização é a do token e o banco limita a 300.
+    // `orgId` e `limite` não entram: o banco traz as orgs do dono do link e limita a 300.
     async listarTarefas(_orgId, escopo) {
       const r = await chamar<{ tarefas: Task[]; nomes_obras: Record<string, string> }>('celular_tarefas_listar', {
         p_space_id:  escopo?.spaceId ?? null,
@@ -205,11 +205,14 @@ export function fonteDoLink(token: string, opcoes?: OpcoesFonteDoLink): TarefasF
 
     listarStatus: () => chamar<TaskStatus[]>('celular_status_listar'),
 
-    listarResponsaveis: () => chamar<{ id: string; name: string }[]>('celular_responsaveis_listar'),
+    // Os da organização DA TAREFA (o banco confere que o dono do link é membro dela).
+    listarResponsaveis: orgId => chamar<{ id: string; name: string }[]>('celular_responsaveis_listar', { p_org: orgId || null }),
 
-    // Sem `orgId`: a RPC recusa chave fora da lista e a organização é a do link.
+    // `org_id`: com espaço, o banco usa a do espaço (e recusa se for outra); sem espaço,
+    // a que a tela perguntou entre as orgs do dono.
     criarTarefa: dados => chamar<Task>('celular_tarefa_criar', {
       p_dados: {
+        org_id:      dados.orgId,
         title:       dados.title,
         description: dados.description,
         start_date:  dados.start_date,

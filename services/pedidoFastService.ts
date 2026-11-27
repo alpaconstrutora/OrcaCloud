@@ -124,7 +124,7 @@ export function fontePedidoFastDoLink(token: string, opts: { aoRecusar?: () => v
     };
 }
 
-/** Obras do passo 2 pelo link (só OBRA da org do link, sem projeto de sistema — no banco). */
+/** Obras do passo 2 pelo link (OBRA das orgs do dono do link em que ele pode pedir, sem projeto de sistema — no banco). */
 export async function listarObrasDoLink(token: string, opts: { aoRecusar?: () => void } = {}): Promise<ObraDoFast[]> {
     const { data, error } = await supabase.rpc('celular_obras_listar', { p_token: token });
     if (error) {

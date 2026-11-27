@@ -42,6 +42,12 @@ interface EmployeeOption { id: string; name: string }
 interface FolderSel      { id: string; space_id: string; name: string; color: string | null }
 interface Props {
   orgId?: string
+  /**
+   * Só no link do celular: as organizações de que o dono do link é membro
+   * (`celular_sessao.orgs`). Tarefa nova sem espaço pergunta entre elas quando há mais
+   * de uma — o link vale para todas (regra do usuário, 27/11/2026).
+   */
+  organizacoesDoLink?: { id: string; name: string }[]
   /** Dentro do `MobilePreviewFrame` (desktop): altura do iframe e respiro do notch. */
   previa?: boolean
 }
@@ -763,7 +769,7 @@ const OrdemSheet: React.FC<{
   </BottomSheet>
 )
 
-const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
+const TasksMobileApp: React.FC<Props> = ({ orgId, organizacoesDoLink, previa = false }) => {
   const today = useToday()
   const now   = useMemo(() => Date.now(), [today])   // "Nova" acompanha a virada do dia
 
@@ -793,8 +799,11 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
 
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const loadSeq    = useRef(0)
-  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget()
   const fonte = useTarefasFonte()
+  const alvoDoLink = useMemo(() => (fonte.modo === 'link'
+    ? { organizacoes: organizacoesDoLink ?? [], descricao: 'Este link vale para todas as suas organizações. Escolha onde criar a tarefa.' }
+    : undefined), [fonte.modo, organizacoesDoLink])
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget(alvoDoLink)
 
   const showToast = useCallback((t: ToastState) => {
     clearTimeout(toastTimer.current)
@@ -944,12 +953,12 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
   const goToday = () => setWeekStart(weekStartOf(today))
 
   const resolveCreateOrg = useCallback(async (): Promise<string | null> => {
-    // Pelo link do celular não há seletor do topo nem sessão: a org é a do espaço (ou a recebida).
-    if (fonte.modo === 'link') return selectedSpace?.org_id ?? orgId ?? null
+    // Com espaço, a org é a dele. Sem espaço, pergunta (REGRA #5) — no logado entre as orgs
+    // da sessão; no link, entre as do dono do link (`alvoDoLink`).
     if (selectedSpace) return selectedSpace.org_id
     const target = await resolveWriteOrg('single')
     return target && target.kind === 'org' ? target.orgId : null
-  }, [fonte.modo, selectedSpace, orgId, resolveWriteOrg])
+  }, [selectedSpace, resolveWriteOrg])
 
   const onCreated = (task: Task) => {
     setShowAddTask(false)

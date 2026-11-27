@@ -106,6 +106,14 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   // tela. Com `useEffect` ele entrava numa tarefa depois, e nessa janela a volta da aba não
   // reconferia nada (14/11: reproduzido com 16 processos em paralelo — 1 disparo em 32 sem
   // ouvinte; era o teste "reconfere a sessão" que caía de vez em quando no CI).
+  // O link vale para TODAS as orgs de que o dono é membro (27/11/2026). Sessão sem `orgs`
+  // (banco antes da migration 20271127200000) = só a org do link, como era.
+  const sessaoOk = estado.tipo === 'ok' ? estado.sessao : null
+  const orgsDoLink = React.useMemo(() => {
+    if (!sessaoOk) return []
+    return sessaoOk.orgs && sessaoOk.orgs.length > 0 ? sessaoOk.orgs : [{ id: sessaoOk.org_id, name: sessaoOk.org_nome }]
+  }, [sessaoOk])
+
   const aberta = estado.tipo === 'ok'
   React.useLayoutEffect(() => {
     if (!aberta || !token) return
@@ -156,17 +164,19 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   const { sessao } = estado
   // Sem nome (conta sem nome cadastrado): só a organização, sem o "· " solto na frente.
   // `celular_sessao` não devolve e-mail — não há outro identificador para mostrar.
+  // Com mais de uma org, o link não é "de" uma delas: diz quantas são.
   const nome = sessao.nome?.trim() ?? ''
+  const rotuloOrgs = orgsDoLink.length > 1 ? `${orgsDoLink.length} organizações` : sessao.org_nome
   return (
     <div className="h-[100dvh] flex flex-col bg-[#eef2ff] font-sans overflow-hidden">
       <header className="bg-white border-b border-slate-200 px-4 pt-2 pb-2 flex-shrink-0 flex flex-col gap-2">
         <p className="text-xs text-slate-600 truncate">
           {nome ? (
             <>
-              <span className="font-medium text-slate-800">{nome}</span> · {sessao.org_nome}
+              <span className="font-medium text-slate-800">{nome}</span> · {rotuloOrgs}
             </>
           ) : (
-            <span className="font-medium text-slate-800">{sessao.org_nome}</span>
+            <span className="font-medium text-slate-800">{rotuloOrgs}</span>
           )}
         </p>
         {/* Seletor de seção: pílula segmentada no topo. Só ele troca de seção; embaixo fica
@@ -207,7 +217,7 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
       >
         {aba === 'tarefas' ? (
           <TarefasFonteContext.Provider value={fonte}>
-            <TasksMobileApp orgId={sessao.org_id} />
+            <TasksMobileApp orgId={sessao.org_id} organizacoesDoLink={orgsDoLink} />
           </TarefasFonteContext.Provider>
         ) : aba === 'diario' ? (
           <DiarioDoLink fonte={fonteDiario} />

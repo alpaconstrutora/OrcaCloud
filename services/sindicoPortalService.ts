@@ -6,6 +6,7 @@ import type {
 import type { EstadoDoSindico } from '../utils/acessoDoSindico';
 import type { ContaDoCondominio, TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
+import type { FormMorador, UnidadeComMoradores } from '../utils/moradoresDoSindico';
 import type { ManutencaoDoPredio } from '../utils/manutencaoDoSindico';
 import type { DocumentoDoPredio } from '../utils/documentosDoSindico';
 import type { DocumentoCategoria } from './condominioComunicacaoService';
@@ -675,6 +676,49 @@ export const sindicoPortalService = {
         });
         if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível remover o documento.'));
         if (!data?.ok) throw new Error(data?.error || 'Não foi possível remover o documento.');
+    },
+
+    // ── G6: moradores e convite ao portal (26/11/2026) ────────────────────────
+    async getMoradores(id: IdentidadeDoSindico, condominioId: string): Promise<{ unidades: UnidadeComMoradores[]; motivoNaoOpera: string | null }> {
+        const { data, error } = await supabase.rpc('sindico_portal_moradores', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; unidades?: UnidadeComMoradores[]; motivoNaoOpera?: string | null };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar os moradores.');
+        return { unidades: r.unidades ?? [], motivoNaoOpera: r.motivoNaoOpera ?? null };
+    },
+
+    /** Cadastro existente (`clientId`) ou novo; o mesmo CPF/e-mail é reaproveitado pelo banco. */
+    async salvarMorador(id: IdentidadeDoSindico, condominioId: string, f: FormMorador): Promise<{ reaproveitado: boolean }> {
+        const r = await escrever('sindico_portal_morador_salvar', {
+            ...params(id), p_empreendimento_id: condominioId,
+            p_dados: f.clientId
+                ? { unitId: f.unitId, papel: f.papel, desde: f.desde || null, clientId: f.clientId }
+                : { unitId: f.unitId, papel: f.papel, desde: f.desde || null,
+                    novo: { nome: f.nome.trim(), documento: f.documento.trim(), email: f.email.trim(), telefone: f.telefone.trim() } },
+        }, 'Não foi possível cadastrar o morador.');
+        return { reaproveitado: !!r.reaproveitado };
+    },
+
+    async encerrarMorador(id: IdentidadeDoSindico, condominioId: string, ocupacaoId: string, data: string): Promise<void> {
+        await escrever('sindico_portal_morador_encerrar', {
+            ...params(id), p_empreendimento_id: condominioId, p_ocupacao: ocupacaoId, p_data: data,
+        }, 'Não foi possível encerrar a ocupação.');
+    },
+
+    async contatoMorador(id: IdentidadeDoSindico, condominioId: string, pessoaId: string, contato: { email: string; telefone: string }): Promise<void> {
+        await escrever('sindico_portal_morador_contato', {
+            ...params(id), p_empreendimento_id: condominioId, p_pessoa: pessoaId, p_dados: contato,
+        }, 'Não foi possível salvar o contato.');
+    },
+
+    /** Convite por e-mail (`portal-invite-user`): o link de criar senha vai SÓ ao e-mail do morador. */
+    async convidarMorador(id: IdentidadeDoSindico, condominioId: string, pessoaId: string): Promise<{ kind: 'invite' | 'recovery' }> {
+        const { data, error } = await supabase.functions.invoke('portal-invite-user', {
+            body: { portal: 'cliente', id: pessoaId, sindico: { token: id.token ?? null, clientId: id.clientId ?? null, empreendimentoId: condominioId } },
+        });
+        if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível enviar o convite.'));
+        if (!data?.ok) throw new Error(data?.error || 'Não foi possível enviar o convite.');
+        return { kind: data.kind === 'recovery' ? 'recovery' : 'invite' };
     },
 
     async receberTitulo(id: IdentidadeDoSindico, tituloId: string, recebimento: {

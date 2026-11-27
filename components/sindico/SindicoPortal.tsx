@@ -11,7 +11,7 @@ import {
 } from '../client/CondominioTab';
 import { usePersistedState } from '../ui/TableUtils';
 import { supabase } from '../../lib/supabase';
-import PainelUnidadesDoPredio from './PainelUnidadesDoPredio';
+import { AbaUnidadesDoSindico } from './PainelMoradoresDoSindico';
 import PainelAvisosDoSindico from './PainelAvisosDoSindico';
 import PainelChamadosDoSindico from './PainelChamadosDoSindico';
 import PainelFinanceiroDoSindico from './PainelFinanceiroDoSindico';
@@ -230,8 +230,10 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                     ) : (
                         <div className="max-w-6xl mx-auto space-y-6">
                             {aba === 'visao' && <PainelVisaoGeral dados={dados} onIr={setAba} />}
+                            {/* G6 (26/11/2026): sub-abas Unidades e cotas / Moradores (cadastrar, contato, encerrar, convidar). */}
                             {aba === 'unidades' && (
-                                <PainelUnidadesDoPredio condominios={dados.condominios} unidades={dados.unidades} rateios={dados.rateios} />
+                                <AbaUnidadesDoSindico identidade={identidade} dados={dados}
+                                    logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} onAlterado={recarregar} />
                             )}
                             {aba === 'chamados' && (
                                 <PainelChamadosDoSindico identidade={identidade} chamados={dados.chamados ?? []} multi={multi}

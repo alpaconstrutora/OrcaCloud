@@ -285,7 +285,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     resolvedor grava `last_used_at` do link → "cannot execute UPDATE in a read-only transaction" pelo link (a prova
     SQL, sem token, não passava por ali) → voláteis; e o contato repetia o telefone → uma vez só.
   - [x] PR + CI + publicação — PR #782, todos os jobs verdes; squash `d445c3a`; CI de `main` no squash verde; domínio serve `d445c3a` (`conferir-producao.sh`).
-- [ ] **G4 — Manutenção e equipamentos** (mesmo pedido de 26/11/2026).
+- [x] **G4 — Manutenção e equipamentos** (mesmo pedido de 26/11/2026).
   Desenho: o app grava direto nas tabelas e a regra mora no banco (concluir a OS → `trg_maintenance_order_completed`
   recalcula o próximo vencimento do item; código patrimonial em `fn_opura_assets_codigo`; texto de marca/modelo em
   `fn_catalogo_espelho`). O portal grava nas MESMAS tabelas por RPC, e os gatilhos valem igual. Abas Manutenção (sub-abas
@@ -307,7 +307,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     item VENCIDO, "Abrir OS" do item, equipamentos do 007, "Informe a marca do modelo."; 0 escrita, 0 erro, sem rolagem
     lateral. **O print achou:** cada aba começava no 1º condomínio (Equipamentos no 007 depois de escolher o 010 em
     Manutenção) → escolha compartilhada.
-  - [ ] PR + CI + publicação.
+  - [x] PR + CI + publicação — PR #783, todos os jobs verdes; squash `1ed77f3`; CI de `main` no squash verde; domínio serve `1ed77f3`.
 - [ ] **G5 — Documentos** (mesmo pedido de 26/11/2026).
   Desenho: no app o gestor sobe direto ao bucket (RLS de membro). O síndico não é membro: o arquivo sobe pela Edge
   `sindico-portal-documentos` (a da ata/procuração da assembleia, fase B) com `finalidade=documento` — as 7 categorias do
@@ -331,4 +331,27 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
   - [ ] Publicar a Edge `sindico-portal-documentos` (o deploy de função é do usuário — `[Production Deploy]`); até lá o
     envio e a remoção pela aba Documentos recusam (a Edge publicada só conhece a assembleia).
   - [ ] PR + CI + publicação.
-- [ ] G6 · [ ] G7
+- [ ] **G6 — Moradores (ocupações) e acesso ao portal** (mesmo pedido de 26/11/2026).
+  Desenho: aba Unidades com sub-abas "Unidades e cotas" (a de antes) e "Moradores" — cadastrar morador numa unidade
+  (cadastro do prédio ou NOVO na org do condomínio; o mesmo CPF/e-mail reaproveitado), contato (e-mail/telefone de quem
+  mora), encerrar (saída; o histórico fica) e CONVIDAR ao portal. O "Portal do Condômino" é o Portal do Cliente (aba
+  Condomínio) desde 23/09. **Achado de privacidade:** o app concede o acesso com o LINK do Portal do Cliente, que é um por
+  pessoa e abre TUDO o que ela tem com a organização (contratos, cobranças) — os moradores do 007/010 são cadastros da
+  construtora, e o síndico é externo. Por isso o portal só CONVIDA por e-mail (`portal-invite-user`, o mesmo do app): o
+  link de criar senha vai para o e-mail do morador e nunca volta para quem convidou. A Edge ganhou a porta do síndico
+  (`{ portal: 'cliente', id, sindico: { token?, clientId?, empreendimentoId } }` →
+  `sindico_portal_morador_autorizar_convite` com a credencial de quem chamou, no lugar de `exigirMembro`).
+  **Pronto quando:** síndico cadastra um morador e envia o acesso ao portal.
+  - [x] Migration `aplicar_20271126950400_portal_sindico_moradores` APLICADA (26/11). Prova em bloco desfeito com a
+    administradora no 007: convite sem e-mail recusado; e-mail inválido recusado; contato salvo e o convite autorizado
+    (org do token = a do cadastro); convite de quem não mora recusado; morador novo nasce na org do Bella Vista; o mesmo
+    CPF reaproveita; papel repetido, 2º responsável financeiro, cadastro de fora, saída antes da entrada e de fora recusados.
+  - [x] Edge `portal-invite-user`: porta do síndico; trava de fonte `portalInviteSindicoMorador.test` (3): o banco autoriza
+    antes do token e do link; só portal cliente; o link nunca volta na resposta.
+  - [x] Tela: `AbaUnidadesDoSindico` + `PainelMoradoresDoSindico`; regras em `utils/moradoresDoSindico.ts` (4 testes);
+    `sindicoMoradores.test` (4). tsc 0. Playwright (harness temporário, apagado), desktop e 390px, Bella Vista: faixa
+    "8 moradores estão sem e-mail", Convidar desligado com o motivo; 0 escrita, 0 erro. **O print achou:** a faixa dizia
+    16 (contava OCUPAÇÕES; cada dono é também o responsável financeiro) → pessoas distintas.
+  - [ ] Publicar a Edge `portal-invite-user` (deploy de função é do usuário); até lá o convite pela aba Moradores recusa.
+  - [ ] PR + CI + publicação.
+- [ ] G7

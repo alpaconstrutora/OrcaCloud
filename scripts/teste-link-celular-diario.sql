@@ -561,7 +561,7 @@ BEGIN
     j := substr(v, 4)::jsonb;
     PERFORM pg_temp.confere((j ->> 'user_id')::uuid = m AND (j ->> 'org_id')::uuid = org
                         AND j -> 'pode_aprovar_diario' = 'false'::jsonb
-                        AND pg_temp.chaves(j) = 'nome,org_id,org_nome,pode_aprovar_diario,user_id',
+                        AND pg_temp.chaves(j) = 'nome,org_id,org_nome,orgs,pode_aprovar_diario,user_id',
         'sessao de m: {user_id, nome, org_id, org_nome, pode_aprovar_diario: false} (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_sessao(%L)::text', tk_g));
     PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'pode_aprovar_diario' = 'true'::jsonb

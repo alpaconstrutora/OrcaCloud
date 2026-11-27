@@ -87,3 +87,56 @@ Tarefas e Pedido Fast pelo link **não mudam** nesta frente (seguem na org do li
   **Item 3 feito** — prova em produção: `TUDO OK`. **Item 4 feito** — orgs do Iago pela função nova: lista os diários
   Coronel Lambert e Igreja (Alpa) e **Garden Cambuhy `5627cec6…` (Garden SPE)**; o link dele (org Alpa) segue válido.
   Item 2: aguardando CI do PR #789 para o merge.
+- 2026-11-27: item 2 feito — PR #789 mesclado com a CI verde (`e603c7c`), produção conferida servindo `e603c7c`,
+  CI da `main` 18/18 verde. **Diário: 4 de 4.**
+
+## Pedido 3 (2026-11-27) — Tarefas e Pedido Fast
+
+> Verifique os demais acessos via link se seguem essa mesma regra (tarefas e pedidos): link por organização está descartado, e o escopo padrão é sempre "as orgs de que a pessoa é membro".
+
+### Verificação (banco de produção e `origin/main`, 27/11)
+
+Nenhum dos dois seguia a regra — tudo preso à org em que o link foi gerado:
+
+- **Tarefas:** `celular_tarefas_listar`, `celular_espacos_listar`, `celular_status_listar`, `celular_responsaveis_listar`,
+  `celular_tarefa_criar` (sempre na org do link; `org_id` recusado como chave estranha) e `celular_tarefa_atualizar`
+  (`t.org_id = org do link`).
+- **Pedido Fast:** `_celular_pedido_fast_autoriza` exigia Compras na org do link; `celular_obras_listar` só obras da org
+  do link; Edge `pedido-fast` recusava obra de outra org (`orgId !== orgDoLink` → 404).
+
+### Desenho
+
+- Mesma regra do Diário: o que a pessoa vê e grava pelo link = orgs de que ela é membro (`_celular_orgs_do_usuario`,
+  `is_org_member_de`), conferido a cada chamada. O link continua ancorado na org em que foi gerado.
+- **Tarefas:** ler/editar uma tarefa usa a org DA TAREFA (gestor, status, responsável). Criar: com espaço → org do
+  espaço; sem espaço → a tela pergunta a org entre as do dono quando há mais de uma (REGRA #5, o mesmo modal do app
+  logado em "Todas"; `useOrgWriteTarget` aceita a lista vinda de fora) e manda `org_id`; sem `org_id` (front antigo) →
+  org do link. `celular_responsaveis_listar(p_token, p_org)` — os da org da tarefa.
+- **Sessão:** `celular_sessao` + `orgs` [{id, name}]. Cabeçalho do link: "nome · N organizações" quando há mais de uma.
+- **Pedido Fast:** autoriza = `fn_pode_criar_pedido_em_alguma_de` (a mesma do app logado); obras = OBRA das orgs em que
+  ele pode pedir; Edge decide por obra (`fn_pode_criar_pedido_de(user, org da obra)`, já existente) e perde a trava
+  "obra da org do link".
+
+### Itens
+
+5. **Migration** `aplicar_20271127200000_link_celular_tarefas_pedidos_todas_orgs.sql`. Pronto quando: aplicada e as
+   provas do item 7 dão `TUDO OK` em produção.
+6. **Front + Edge** — `tarefasFonte` (org_id, p_org), `TasksMobileApp` (pergunta a org no link), `useOrgWriteTarget`
+   (lista de fora), `CelularTokenGate` (orgs e cabeçalho), Edge `pedido-fast`. Pronto quando: `tsc` 0, testes verdes,
+   PR mesclado com a CI verde e a Edge publicada.
+7. **Provas** — `teste-link-celular-tarefas.sql` (B nas orgs do dono; "token de outra org" com quem não é membro de o;
+   seção D nova), `teste-link-celular-pedido-fast.sql` (item 6 novo; membro sem owner/admin), `teste-link-celular-diario.sql`
+   (chaves da sessão com `orgs`). Pronto quando: `TUDO OK` em produção depois do item 5.
+
+### Andamento
+
+- 2026-11-27: itens 5–7 escritos. Ensaio no banco de produção (migration em BEGIN…ROLLBACK): Tarefas, Pedido Fast e
+  Diário `TUDO OK`. Contraprova sem a migration: Tarefas falha em "criar com org_id … → 42501 (veio 22023: campo não
+  aceito: org_id)"; Pedido Fast falha em "membro de o2: obras da org do link E de o2". Front: `tsc` 0; 12 arquivos,
+  140 testes verdes (novo: `TasksMobileAppLinkTodasOrgs`). Pendente: o usuário aplica a migration; Edge publicada pelo
+  usuário depois do merge.
+- 2026-11-27: **item 5 feito** — migration aplicada pelo usuário (da pasta desta frente). Conferido no banco:
+  `celular_responsaveis_listar(text, uuid)` é a única sobrecarga, `celular_sessao` com `orgs`, `_celular_pedido_fast_autoriza`
+  com `fn_pode_criar_pedido_em_alguma_de`. **Item 7 feito** — em produção: Tarefas, Pedido Fast e Diário `TUDO OK`.
+  Caso do Iago: orgs Alpa (4 tarefas abertas visíveis, pode pedir, 16 obras) e Garden SPE (pode pedir, 2 obras) —
+  as obras da Garden entram na lista do Pedido Fast pelo link. Item 6: CI do PR #790, merge, publicar a Edge.

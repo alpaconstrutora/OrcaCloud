@@ -262,10 +262,22 @@ export function useDefaultWriteOrgId(): string | null {
  *   • topo com organização (ou empresa/obra) → NUNCA. Resolve direto.
  *   • topo em "Todas" e o usuário só tem 1 organização → NUNCA. Resolve com ela.
  *   • topo em "Todas" e há N organizações → aí sim.
+ *
+ * `fora` (link do celular, sem sessão nem seletor do topo): a lista vem do banco
+ * — as organizações de que o dono do link é membro (`celular_sessao.orgs`) — e
+ * conta como "Todas": 1 organização resolve direto, N perguntam.
  */
-export function useOrgWriteTarget() {
-    const { orgId } = useOrgContext();
-    const organizations = useWritableOrganizations();
+export interface AlvoDeEscritaDeFora {
+    organizacoes: { id: string; name: string }[];
+    /** Texto do modal no lugar do que fala do seletor do topo. */
+    descricao: string;
+}
+
+export function useOrgWriteTarget(fora?: AlvoDeEscritaDeFora) {
+    const { orgId: orgDoTopo } = useOrgContext();
+    const daSessao = useWritableOrganizations();
+    const orgId = fora ? null : orgDoTopo;
+    const organizations: { id: string; name: string }[] = fora ? fora.organizacoes : daSessao;
     const [pending, setPending] = React.useState<{
         mode: WriteTargetMode;
         resolve: (t: WriteTarget | null) => void;
@@ -301,9 +313,11 @@ export function useOrgWriteTarget() {
             <ModalHeader
                 title="Selecionar organização"
                 description={
-                    pending?.mode === 'all-allowed'
-                        ? 'O seletor do topo está em "Todas as organizações". Escolha onde cadastrar, ou mantenha em todas.'
-                        : 'O seletor do topo está em "Todas as organizações". Escolha onde cadastrar.'
+                    fora
+                        ? fora.descricao
+                        : pending?.mode === 'all-allowed'
+                            ? 'O seletor do topo está em "Todas as organizações". Escolha onde cadastrar, ou mantenha em todas.'
+                            : 'O seletor do topo está em "Todas as organizações". Escolha onde cadastrar.'
                 }
                 icon={
                     <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600">

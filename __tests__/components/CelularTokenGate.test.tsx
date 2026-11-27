@@ -30,14 +30,15 @@ vi.mock('../../lib/supabase', () => ({ supabase: { rpc: sondas.rpc } }))
 vi.mock('../../components/TasksMobileApp', async () => {
   const R = await import('react')
   const { useTarefasFonte } = await import('../../services/celular/tarefasFonte')
-  const Sonda: React.FC<{ orgId?: string }> = ({ orgId }) => {
+  const Sonda: React.FC<{ orgId?: string; organizacoesDoLink?: { id: string; name: string }[] }> = ({ orgId, organizacoesDoLink }) => {
     const fonte = useTarefasFonte()
     sondas.fontes.push(fonte)
     R.useEffect(() => {
       sondas.listar()
       fonte.listarTarefas(orgId, null, 300).catch(() => { /* a tela real mostra o erro */ })
     }, [fonte, orgId])
-    return R.createElement('div', { 'data-testid': 'tela-de-tarefas' }, `tarefas de ${orgId}`)
+    return R.createElement('div', { 'data-testid': 'tela-de-tarefas' },
+      `tarefas de ${orgId} orgs=${(organizacoesDoLink ?? []).map(o => o.id).join(',')}`)
   }
   return { default: Sonda }
 })
@@ -144,6 +145,20 @@ describe('CelularTokenGate', () => {
     const { container } = render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
     expect((container.querySelector('header') as HTMLElement).querySelector('p')?.textContent).toBe('Ana Souza · Alpa')
+  })
+
+  it('link de quem é membro de várias orgs: cabeçalho diz quantas, e Tarefas recebe todas', async () => {
+    const orgs = [{ id: 'o1', name: 'Alpa' }, { id: 'o2', name: 'Garden SPE' }]
+    responder({ celular_sessao: () => ok({ ...SESSAO, orgs }) })
+    const { container } = render(<CelularTokenGate token={TOKEN} />)
+    expect(await screen.findByTestId('tela-de-tarefas')).toHaveTextContent('orgs=o1,o2')
+    expect((container.querySelector('header') as HTMLElement).querySelector('p')?.textContent).toBe('Ana Souza · 2 organizações')
+  })
+
+  it('sessão sem a lista de orgs (banco antigo): Tarefas recebe só a org do link', async () => {
+    responder({ celular_sessao: () => ok(SESSAO) })
+    render(<CelularTokenGate token={TOKEN} />)
+    expect(await screen.findByTestId('tela-de-tarefas')).toHaveTextContent('orgs=o1')
   })
 
   it('tocar "Diário" monta o Diário com a fonte do link; voltar a "Tarefas" traz as tarefas', async () => {

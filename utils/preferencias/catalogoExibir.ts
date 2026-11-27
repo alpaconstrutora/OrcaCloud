@@ -175,6 +175,9 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
   },
   bool('vista3dEnvelope', 'Envelope edificável', '3D', true),
   bool('vista3dMassa', 'Blocos de massa', '3D', true),
+  // O entorno da Maquete (26/11/2026): cada um com a sua linha em Camadas › Terreno, sem tirar o resto da Maquete.
+  bool('vista3dArvores', 'Árvores', '3D', true),
+  bool('vista3dPrediosDoEntorno', 'Prédios do entorno', '3D', true),
   // Os nomes no 3D (28/10/2026): "Torre A" acima do bloco e "101" no meio de cada unidade.
   bool('vista3dNomesDosBlocos', 'Nomes dos blocos', '3D', true),
   bool('vista3dNomesDasUnidades', 'Nomes das unidades', '3D', true),

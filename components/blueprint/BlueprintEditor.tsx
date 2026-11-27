@@ -685,6 +685,7 @@ import { usePrediosDaMaquete } from '../../hooks/usePrediosDaMaquete';
 import { useCoberturaDaMaquete } from '../../hooks/useCoberturaDaMaquete';
 import { ATRIBUICAO_OSM, caixaGeoDaGrade, prediosNoDesenho } from '../../utils/blueprintMaqueteOsm';
 import { arvoresDaCobertura } from '../../utils/blueprintMaqueteArvores';
+import { entornoAVista } from '../../utils/blueprintMaqueteEntorno';
 import { anelValido } from '../../utils/blueprintPlato3d';
 import { AREA_MAXIMA_KM2, areaDaCaixaKm2, ATRIBUICAO_WORLDCOVER } from '../../utils/geo/coberturaDoSolo';
 import { amostradorDaGrade, amostradorDaMalha, amostradorDoChao, formatarCotaM, gerarCurvasNosNiveis, malhaDaGrade } from '../../utils/blueprintTopografia';
@@ -2520,6 +2521,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [estilo3d, setEstilo3d] = usePreferenciaDaPlanta<Estilo3d>('vista3dEstilo');
   // O platô no 3D: painel completo à esquerda (padrão) ou selo compacto no rodapé — 25/11/2026, reel da Hektar.
   const [modoDoPainelDoPlato, setModoDoPainelDoPlato] = usePreferenciaDaPlanta<ModoDoPainelDoPlato>('vista3dPainelDoPlato');
+  // O entorno da Maquete, cada parte com a sua linha em Camadas › Terreno (26/11/2026).
+  const [mostrarArvores3d, setMostrarArvores3d] = usePreferenciaDaPlanta<boolean>('vista3dArvores');
+  const [mostrarPrediosDoEntorno3d, setMostrarPrediosDoEntorno3d] = usePreferenciaDaPlanta<boolean>('vista3dPrediosDoEntorno');
   /** ESTILO DA PLANTA (E8.4): técnica ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
   const [estiloPlanta, setEstiloPlanta] = usePreferenciaDaPlanta<EstiloDaPlanta>('estiloPlanta');
   /** FASES DE REFORMA (E10.2): o filtro da vista (tudo / antes / depois / só demolição). */
@@ -5400,7 +5404,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       ...(editor.model.blocos ?? []).filter((b) => b.pontos.length >= 3).map((b) => caixa(b.pontos, folga)),
     ];
   }, [editor.model.walls, editor.model.blocos]);
-  const entornoDaMaquete = useMemo(() => {
+  const entornoCalculado = useMemo(() => {
     const v = topografia.selecionada;
     const g = editor.model.georreferencia;
     if (!maqueteAtiva || !v || !g) return null;
@@ -5418,21 +5422,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [maqueteAtiva, chaveDaTopografia, editor.model.georreferencia, prediosOsm, coberturaDoSolo, construidoDoEstudo, cotaZeroDoTerrenoM]);
+  // O que vai para o 3D: a parte oculta em Camadas › Terreno sai (o cálculo acima não muda).
+  const entornoDaMaquete = useMemo(
+    () => entornoAVista(entornoCalculado, { arvores: mostrarArvores3d, predios: mostrarPrediosDoEntorno3d }),
+    [entornoCalculado, mostrarArvores3d, mostrarPrediosDoEntorno3d],
+  );
   const notasDaMaquete = useMemo(() => {
     if (!maqueteAtiva) return [];
+    if (!mostrarArvores3d && !mostrarPrediosDoEntorno3d) return [];
     if (!topografia.selecionada) return ['Sem prédios e árvores: gere as curvas de nível do terreno — o entorno se apoia no relevo.'];
     if (!editor.model.georreferencia) return ['Sem prédios e árvores: o estudo não está georreferenciado (Terreno › Onde fica).'];
     const notas: string[] = [];
-    if (prediosOsm.estado === 'carregando') notas.push('Buscando os prédios do OpenStreetMap…');
-    else if (prediosOsm.estado === 'erro') notas.push(`Prédios não vieram: ${prediosOsm.motivo}.`);
-    else if (prediosOsm.estado === 'pronto') notas.push((entornoDaMaquete?.predios.length ?? 0) > 0 ? `Prédios ${ATRIBUICAO_OSM}` : 'Nenhum prédio do OpenStreetMap nesta área.');
-    if (!coberturaCabe) notas.push(`Sem árvores: o terreno passa de ${AREA_MAXIMA_KM2} km².`);
-    else if (coberturaDoSolo.estado === 'carregando') notas.push('Buscando as árvores (ESA WorldCover)…');
-    else if (coberturaDoSolo.estado === 'erro') notas.push(`Árvores não vieram: ${coberturaDoSolo.motivo}.`);
-    else if (coberturaDoSolo.estado === 'pronto') notas.push((entornoDaMaquete?.arvores.length ?? 0) > 0 ? `Árvores: ${ATRIBUICAO_WORLDCOVER}` : 'Nenhuma mata nesta área (ESA WorldCover).');
+    // Parte oculta em Camadas › Terreno não leva nota nem crédito (não está na tela).
+    if (mostrarPrediosDoEntorno3d) {
+      if (prediosOsm.estado === 'carregando') notas.push('Buscando os prédios do OpenStreetMap…');
+      else if (prediosOsm.estado === 'erro') notas.push(`Prédios não vieram: ${prediosOsm.motivo}.`);
+      else if (prediosOsm.estado === 'pronto') notas.push((entornoCalculado?.predios.length ?? 0) > 0 ? `Prédios ${ATRIBUICAO_OSM}` : 'Nenhum prédio do OpenStreetMap nesta área.');
+    }
+    if (mostrarArvores3d) {
+      if (!coberturaCabe) notas.push(`Sem árvores: o terreno passa de ${AREA_MAXIMA_KM2} km².`);
+      else if (coberturaDoSolo.estado === 'carregando') notas.push('Buscando as árvores (ESA WorldCover)…');
+      else if (coberturaDoSolo.estado === 'erro') notas.push(`Árvores não vieram: ${coberturaDoSolo.motivo}.`);
+      else if (coberturaDoSolo.estado === 'pronto') notas.push((entornoCalculado?.arvores.length ?? 0) > 0 ? `Árvores: ${ATRIBUICAO_WORLDCOVER}` : 'Nenhuma mata nesta área (ESA WorldCover).');
+    }
     return notas;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maqueteAtiva, chaveDaTopografia, editor.model.georreferencia, prediosOsm, coberturaDoSolo, coberturaCabe, entornoDaMaquete]);
+  }, [maqueteAtiva, chaveDaTopografia, editor.model.georreferencia, prediosOsm, coberturaDoSolo, coberturaCabe, entornoCalculado, mostrarArvores3d, mostrarPrediosDoEntorno3d]);
 
   /**
    * O chão sob a pessoa no modo de percorrer, em metros de mundo: o 3D usa
@@ -11783,6 +11798,44 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     },
   ];
   /**
+   * O ENTORNO DA MAQUETE com uma linha para cada parte (26/11/2026: "a vegetação é uma camada separada?" — não
+   * era: só saía trocando o estilo do 3D, e a Maquete inteira ia junto). Em Camadas › Terreno e no Exibir do 3D.
+   */
+  const motivoSemEntorno =
+    estilo3d !== 'MAQUETE'
+      ? 'Só no estilo Maquete do 3D (Vista › Estilo do 3D).'
+      : !mostrarTerreno3d || !terrenoAVista
+        ? 'Ligue o Terreno no 3D: o entorno se apoia no relevo.'
+        : !topografia.selecionada
+          ? 'Gere as curvas de nível do terreno: o entorno se apoia no relevo.'
+          : !editor.model.georreferencia
+            ? 'O estudo não está georreferenciado (Terreno › Onde fica).'
+            : null;
+  const itensDaMaqueteNoExibir: ItemDeExibicao[] = [
+    {
+      chave: 'arvores-3d',
+      rotulo: 'Árvores',
+      icone: Trees,
+      ligado: mostrarArvores3d,
+      alternar: () => setMostrarArvores3d((v) => !v),
+      desabilitado: motivoSemEntorno !== null,
+      ajuda:
+        motivoSemEntorno ??
+        'As árvores da Maquete, plantadas onde o mapa de cobertura do solo (ESA WorldCover 2021, 10 m) marca mata. Oculte para ver o satélite ou o relevo sem as copas; o resto da Maquete fica.',
+    },
+    {
+      chave: 'predios-do-entorno-3d',
+      rotulo: 'Prédios do entorno',
+      icone: Building2,
+      ligado: mostrarPrediosDoEntorno3d,
+      alternar: () => setMostrarPrediosDoEntorno3d((v) => !v),
+      desabilitado: motivoSemEntorno !== null,
+      ajuda:
+        motivoSemEntorno ??
+        'Os prédios vizinhos da Maquete, do OpenStreetMap, com a altura que o mapa informa. Oculte para ver só o terreno e o estudo; o resto da Maquete fica.',
+    },
+  ];
+  /**
    * ⚠️ FUNÇÃO, e não constante (P2.64): este painel é montado em DOIS lugares —
    * no dock quando há divisa selecionada e na gaveta "Dados do lote". Só a
    * gaveta recebe o pedido de importação; com o token nos dois, o clique no
@@ -16579,6 +16632,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                               ? 'Ligue o Terreno (acima): as curvas ficam sobre o relevo.'
                               : 'As linhas das curvas sobre o relevo, na cor da planta. É a mesma escolha da planta (Exibir › Curvas de nível).',
                         },
+                        ...itensDaMaqueteNoExibir,
                         {
                           chave: 'envelope-3d',
                           rotulo: 'Envelope edificável',
@@ -18278,7 +18332,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onIsolar={isolarCamada}
                 onReexibir={reexibirCamadas}
                 // As opções do Exibir que são de uma disciplina (25/11/2026): os MESMOS itens do menu.
-                exibicao={{ TERRENO: itensDoTerrenoNoExibir, ESTRUTURA: [itemDosEixosNoExibir] }}
+                exibicao={{ TERRENO: [...itensDoTerrenoNoExibir, ...itensDaMaqueteNoExibir], ESTRUTURA: [itemDosEixosNoExibir] }}
                 mapa={{
                   estados: estadosDoMapa,
                   onMudar: setMapaSalvo,

@@ -308,7 +308,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     lateral. **O print achou:** cada aba começava no 1º condomínio (Equipamentos no 007 depois de escolher o 010 em
     Manutenção) → escolha compartilhada.
   - [x] PR + CI + publicação — PR #783, todos os jobs verdes; squash `1ed77f3`; CI de `main` no squash verde; domínio serve `1ed77f3`.
-- [ ] **G5 — Documentos** (mesmo pedido de 26/11/2026).
+- [x] **G5 — Documentos** (mesmo pedido de 26/11/2026).
   Desenho: no app o gestor sobe direto ao bucket (RLS de membro). O síndico não é membro: o arquivo sobe pela Edge
   `sindico-portal-documentos` (a da ata/procuração da assembleia, fase B) com `finalidade=documento` — as 7 categorias do
   condomínio, visibilidade escolhida — e a autorização `sindico_portal_documento_autorizar` (síndico logado OU a
@@ -328,10 +328,10 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     `utils/documentosDoSindico.ts`; `sindicoDocumentos.test` (3). tsc 0. Playwright (harness temporário, apagado; leituras
     reais, escritas e Edge bloqueadas), desktop e 390px: lista vazia do 007, título sugerido pelo nome do arquivo
     ("laudo spda 2026"); 0 escrita, 0 erro, sem rolagem lateral.
-  - [ ] Publicar a Edge `sindico-portal-documentos` (o deploy de função é do usuário — `[Production Deploy]`); até lá o
-    envio e a remoção pela aba Documentos recusam (a Edge publicada só conhece a assembleia).
+  - [x] Publicar a Edge `sindico-portal-documentos` — publicada pelo usuário em 27/11 a partir de `1280163` (v1→v2,
+    `verify_jwt` ligado; POST sem login = 401).
   - [x] PR + CI + publicação — PR #784, todos os jobs verdes; squash `5f61c63`; CI de `main` no squash: falhou 1 teste de OUTRO módulo (documentos para assinar, "PDF que não desenha… PDF_EXTERNO") e passou inteira no merge seguinte (`9f1dd96`) — instável, não da G5; domínio serviu `5f61c63`.
-- [ ] **G6 — Moradores (ocupações) e acesso ao portal** (mesmo pedido de 26/11/2026).
+- [x] **G6 — Moradores (ocupações) e acesso ao portal** (mesmo pedido de 26/11/2026).
   Desenho: aba Unidades com sub-abas "Unidades e cotas" (a de antes) e "Moradores" — cadastrar morador numa unidade
   (cadastro do prédio ou NOVO na org do condomínio; o mesmo CPF/e-mail reaproveitado), contato (e-mail/telefone de quem
   mora), encerrar (saída; o histórico fica) e CONVIDAR ao portal. O "Portal do Condômino" é o Portal do Cliente (aba
@@ -352,9 +352,10 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     `sindicoMoradores.test` (4). tsc 0. Playwright (harness temporário, apagado), desktop e 390px, Bella Vista: faixa
     "8 moradores estão sem e-mail", Convidar desligado com o motivo; 0 escrita, 0 erro. **O print achou:** a faixa dizia
     16 (contava OCUPAÇÕES; cada dono é também o responsável financeiro) → pessoas distintas.
-  - [ ] Publicar a Edge `portal-invite-user` (deploy de função é do usuário); até lá o convite pela aba Moradores recusa.
+  - [x] Publicar a Edge `portal-invite-user` — publicada pelo usuário em 27/11 a partir de `1280163` (v8→v9, `verify_jwt`
+    ligado; POST sem login = 401).
   - [x] PR + CI + publicação — PR #785, todos os jobs verdes; squash `9f1dd96`; CI de `main` no squash verde; domínio serve `9f1dd96`.
-- [ ] **G7 — Ficha do condomínio** (mesmo pedido de 26/11/2026).
+- [x] **G7 — Ficha do condomínio** (mesmo pedido de 26/11/2026).
   Desenho: "Editar ficha" no cartão do condomínio (Visão geral). O app grava por `condominio_salvar_ficha` (membro); o
   portal grava por `sindico_portal_ficha_salvar` SÓ os dados do condomínio — razão social, CNPJ, instalação, multa e juros.
   Síndico, mandato e a exigência de aprovação do rateio ficam com a administradora (o síndico não estende o próprio
@@ -367,4 +368,4 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
   - [x] Tela: `FichaDoCondominioSheet`; regras em `utils/fichaDoSindico.ts` (2 testes); `sindicoFicha.test` (2). tsc 0.
     Playwright (harness temporário, apagado), desktop e 390px: multa 3% → botão com a frase do Código Civil; mandato e
     aprovação só leitura; 0 escrita, 0 erro, sem rolagem lateral.
-  - [ ] PR + CI + publicação.
+  - [x] PR + CI + publicação — PR #786, todos os jobs verdes; squash `1280163`; CI de `main` no squash verde; domínio serve `1280163`.

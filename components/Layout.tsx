@@ -482,14 +482,13 @@ const Layout: React.FC<LayoutProps> = ({
 
     // Mesma decisão do menu: tela de módulo que o usuário não vê no menu não
     // aparece na busca (até 15/11/2026 aparecia e o clique caía no guard de rota).
-    // Diretoria (17/11/2026) fica fora do atalho de desenvolvedor: só a flag ou o acesso
-    // total abrem — a mesma regra do banco (utils/permissaoDiretoria.ts).
-    if (isDev) return items.filter(item => item.id !== 'diretoria' || Boolean(mod.diretoria));
+    // Sem atalho de desenvolvedor (27/11/2026): `mod` já vem todo ligado para ele, e um
+    // módulo que a organização desligou some da busca para todos — como some do menu.
     return items.filter(item => {
       const chave = MODULO_DO_ITEM_DE_BUSCA[item.id];
       return !chave || Boolean(mod[chave]);
     });
-  }, [mod, isDev]);
+  }, [mod]);
 
   const activeCommand = React.useMemo(
     () => commandItems.find(item => item.id === activeView),
@@ -817,11 +816,11 @@ const Layout: React.FC<LayoutProps> = ({
                 }}
                 hasActiveChild={especialidadesViews.includes(activeView)}
               >
-                {(mod.pro       || isDev) && <DropdownItem id="pro-dashboard"      label="ÒPURA Pro"      icon={Briefcase} />}
-                {(mod.offices   || isDev) && <DropdownItem id="offices-dashboard"  label="ÒPURA Offices"  icon={Palette} />}
-                {(mod.reformas  || isDev) && <DropdownItem id="reformas-dashboard" label="ÒPURA Reformas" icon={Hammer} />}
-                {(mod.ecommerce || isDev) && <DropdownItem id="opura-cno" label="ÒPURA CNO e Previdência" icon={Calculator} />}
-                {(mod.ecommerce || isDev) && <DropdownItem id="ecommerce-dashboard" label="ÒPURA E-commerce" icon={Shield} />}
+                {mod.pro && <DropdownItem id="pro-dashboard"      label="ÒPURA Pro"      icon={Briefcase} />}
+                {mod.offices && <DropdownItem id="offices-dashboard"  label="ÒPURA Offices"  icon={Palette} />}
+                {mod.reformas && <DropdownItem id="reformas-dashboard" label="ÒPURA Reformas" icon={Hammer} />}
+                {mod.ecommerce && <DropdownItem id="opura-cno" label="ÒPURA CNO e Previdência" icon={Calculator} />}
+                {mod.ecommerce && <DropdownItem id="ecommerce-dashboard" label="ÒPURA E-commerce" icon={Shield} />}
               </NavDropdown>
 
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} />
@@ -848,7 +847,7 @@ const Layout: React.FC<LayoutProps> = ({
                 <DropdownItem id="opura-central-cliente" label="Central de Clientes" icon={Users} />
                 <DropdownItem id="opura-central-fornecedor" label="Central de Fornecedores" icon={Truck} />
                 <DropdownItem id="opura-market" label="ÒPURA Market" icon={Search} />
-                {(mod.ecommerce || isDev) && <DropdownItem id="opura-governance" label="Governança Corporativa" icon={Shield} />}
+                {mod.ecommerce && <DropdownItem id="opura-governance" label="Governança Corporativa" icon={Shield} />}
               </NavDropdown>
 
               <NavGroup label="Operacional" />
@@ -903,7 +902,7 @@ const Layout: React.FC<LayoutProps> = ({
               </NavDropdown>
               <NavItem id="opura-processos" icon={ClipboardList} label="Processos" />
 
-              {(mod.obras || isDev) && (
+              {mod.obras && (
                 <>
                   <NavDropdown
                     label="Engenharia"
@@ -947,13 +946,13 @@ const Layout: React.FC<LayoutProps> = ({
                       mais sem nada em troca. */}
                   <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                   {/* Riscos (14/11/2026): chave própria `canViewRisks`; sem nada gravado, herda Obras. */}
-                  {(mod.riscos || isDev) && <NavItem id="riscos" icon={ShieldAlert} label="Riscos" />}
+                  {mod.riscos && <NavItem id="riscos" icon={ShieldAlert} label="Riscos" />}
                   {/* Qualidade SiAC (25/11/2026): chave própria `canViewQualitySystem`; sem nada gravado, herda Obras. */}
-                  {(mod.qualidade_siac || isDev) && <NavItem id="qualidade-siac" icon={BadgeCheck} label="Qualidade" />}
+                  {mod.qualidade_siac && <NavItem id="qualidade-siac" icon={BadgeCheck} label="Qualidade" />}
                 </>
               )}
 
-              {(mod.rh || isDev) && (
+              {mod.rh && (
                 <NavDropdown
                   label="Recursos Humanos"
                   icon={Users}
@@ -1008,7 +1007,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </NavDropdown>
               )}
 
-              {(mod.compras || isDev) && (
+              {mod.compras && (
                 <>
                   <NavDropdown
                     label="Suprimentos"
@@ -1032,7 +1031,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.financeiro || mod.fiscal || mod.ecommerce || isDev) && (
+              {(mod.financeiro || mod.fiscal || mod.ecommerce) && (
                 <>
                   <NavDropdown
                     label="Financeiro"
@@ -1044,7 +1043,7 @@ const Layout: React.FC<LayoutProps> = ({
                     }}
                     hasActiveChild={financeiroViews.includes(activeView)}
                   >
-                    {(mod.financeiro || isDev) && (
+                    {mod.financeiro && (
                       <>
                         {/* Agrupado por PROCESSO (a receber / a pagar / tesouraria /
                             análise) desde 2026-08-15. Antes era uma lista corrida de
@@ -1101,7 +1100,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.crm || ((mod as any).rentals ?? mod.crm) || isDev) && (
+              {(mod.crm || ((mod as any).rentals ?? mod.crm)) && (
                 <>
                   <NavDropdown
                     label="Comercial"
@@ -1110,18 +1109,18 @@ const Layout: React.FC<LayoutProps> = ({
                     onToggle={() => setIsVendasOpen(o => !o)}
                     hasActiveChild={['gestao-vendas','sales','rentals','condominios','services-commercial','service-contracts','broker-proposals','broker-leads','broker-commissions','broker-materials','broker-ranking','broker-training','broker-events','broker-chat','broker-analytics','broker-health'].includes(activeView)}
                   >
-                    {(mod.crm || isDev) && <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />}
-                    {(((mod as any).rentals ?? mod.crm) || isDev) && <DropdownItem id="rentals" label="Locações" icon={Building2} />}
+                    {mod.crm && <DropdownItem id="sales" label="Vendas de Ativos" icon={Building2} />}
+                    {(((mod as any).rentals ?? mod.crm)) && <DropdownItem id="rentals" label="Locações" icon={Building2} />}
                     {/* Pós-entrega: o edifício operado. Fica junto de Locações porque
                         as duas são operação de imóvel, não incorporação. */}
-                    {(mod.crm || isDev) && <DropdownItem id="condominios" label="Condomínios" icon={Building2} />}
-                    {(mod.crm || isDev) && <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />}
-                    {(mod.crm || isDev) && <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />}
+                    {mod.crm && <DropdownItem id="condominios" label="Condomínios" icon={Building2} />}
+                    {mod.crm && <DropdownItem id="service-contracts" label="Contratos de Serviço" icon={FileText} />}
+                    {mod.crm && <DropdownItem id="services-commercial" label="CRM Serviços" icon={Briefcase} />}
                   </NavDropdown>
                 </>
               )}
 
-              {(mod.incorporacao || isDev) && (
+              {mod.incorporacao && (
                 <>
                   <NavDropdown
                     label="Incorporação"
@@ -1163,19 +1162,19 @@ const Layout: React.FC<LayoutProps> = ({
                         SÍNDICO (gerado e revogado aqui) e o espelho do que cada
                         morador vê. O id da view é herança do portal do condômino. */}
                     <DropdownItem id="condomino-portal" label="Portal do Condomínio" icon={Home} />
-                    {(mod.broker_portal || isDev) && (
+                    {mod.broker_portal && (
                       <DropdownItem id="broker-area" label="Portal do Corretor" icon={Briefcase} />
                     )}
                     {/* Gestão de treinamentos (catálogo, atribuições, registros, painéis e
                         acessos de quem entra em /portal-treinamentos). Saiu do RH em
                         16/10/2026 e veio para Portais em 16/10/2026 (mais tarde), a pedido do usuário.
                         Permissão própria, herdando do RH (utils/permissaoTreinamentos.ts). */}
-                    {(mod.treinamentos || isDev) && (
+                    {mod.treinamentos && (
                       <DropdownItem id="treinamentos" label="Portal de Treinamentos" icon={GraduationCap} />
                     )}
                     {/* Saiu de Recursos Humanos em 24/10/2026, a pedido do usuário. A
                         permissão continua a do RH (AppRouter: `labor-` → canViewLabor). */}
-                    {(mod.rh || isDev) && (
+                    {mod.rh && (
                       <DropdownItem id="labor-portal" label="Portal do Colaborador" icon={Smartphone} />
                     )}
                   </NavDropdown>
@@ -1195,7 +1194,7 @@ const Layout: React.FC<LayoutProps> = ({
                 </>
               )}
 
-              {(mod.fiscal || isDev) && (
+              {mod.fiscal && (
                 <>
                   <NavItem id="fiscal-nfe" icon={Receipt} label="Fiscal e NF-e" />
                 </>
@@ -1314,11 +1313,11 @@ const Layout: React.FC<LayoutProps> = ({
 
               <div className="space-y-1 mb-4">
                 <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Especialidades</div>
-                {(mod.pro       || isDev) && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      forceFull />}
-                {(mod.offices   || isDev) && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  forceFull />}
-                {(mod.reformas  || isDev) && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" forceFull />}
-                {(mod.ecommerce || isDev) && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO e Previdência" forceFull />}
-                {(mod.ecommerce || isDev) && <NavItem id="ecommerce-dashboard" icon={Shield} label="ÒPURA E-commerce" forceFull />}
+                {mod.pro && <NavItem id="pro-dashboard"      icon={Briefcase} label="ÒPURA Pro"      forceFull />}
+                {mod.offices && <NavItem id="offices-dashboard"  icon={Palette}   label="ÒPURA Offices"  forceFull />}
+                {mod.reformas && <NavItem id="reformas-dashboard" icon={Hammer}    label="ÒPURA Reformas" forceFull />}
+                {mod.ecommerce && <NavItem id="opura-cno" icon={Calculator} label="ÒPURA CNO e Previdência" forceFull />}
+                {mod.ecommerce && <NavItem id="ecommerce-dashboard" icon={Shield} label="ÒPURA E-commerce" forceFull />}
               </div>
 
               {mod.diretoria && <NavItem id="diretoria" icon={Gavel} label="Diretoria" forceFull />}
@@ -1332,10 +1331,10 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="supplier-area" icon={Truck} label="Portal do Fornecedor" forceFull />
                   <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" forceFull />
                   <NavItem id="partner-workspaces-admin" icon={Users} label="Portal de Parceiros" forceFull />
-                  {(mod.treinamentos || isDev) && (
+                  {mod.treinamentos && (
                     <NavItem id="treinamentos" icon={GraduationCap} label="Portal de Treinamentos" forceFull />
                   )}
-                  {(mod.rh || isDev) && (
+                  {mod.rh && (
                     <NavItem id="labor-portal" icon={Smartphone} label="Portal do Colaborador" forceFull />
                   )}
                 </div>
@@ -1361,10 +1360,10 @@ const Layout: React.FC<LayoutProps> = ({
               )}
 
               <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />
-              {(mod.riscos || isDev) && <NavItem id="riscos" icon={ShieldAlert} label="Riscos" forceFull />}
-              {(mod.qualidade_siac || isDev) && <NavItem id="qualidade-siac" icon={BadgeCheck} label="Qualidade" forceFull />}
+              {mod.riscos && <NavItem id="riscos" icon={ShieldAlert} label="Riscos" forceFull />}
+              {mod.qualidade_siac && <NavItem id="qualidade-siac" icon={BadgeCheck} label="Qualidade" forceFull />}
 
-              {(mod.ecommerce || isDev) && (
+              {mod.ecommerce && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />
               )}
               <NavItem id="opura-assets" icon={Package} label="Gestão de Ativos" forceFull />

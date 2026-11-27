@@ -78,7 +78,7 @@ import { podeEditarRiscos } from '../utils/permissaoRiscos';
 import { podeVerDiretoria } from '../utils/permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import { pedirFolha } from '../utils/folhaDeConfiguracoes';
-import { permitidoNaOrg, vinculosDoUsuario } from '../utils/modulosPermitidos';
+import { moduloDaTela, moduloLigadoNaOrg, moduloLigadoNoContexto, permitidoNaOrg, vinculosDoUsuario } from '../utils/modulosPermitidos';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
@@ -278,6 +278,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // (`_diretoria_orgs`, utils/permissaoDiretoria.ts). Enquanto membro/organizações carregam,
   // deixa abrir: quem barra os dados é o painel no banco (42501).
   const podeAbrirDiretoria = React.useMemo(() => {
+    // A organização pode não ter a Diretoria (Módulos da organização, 27/11/2026) — vale até para o acesso total.
+    if (activeOrganizationId && activeOrg && !moduloLigadoNaOrg(activeOrg, 'diretoria')) return false;
     if (isDevEmail) return true;
     if (activeOrganizationId) {
       if (!currentMember) return true;
@@ -285,14 +287,19 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     }
     const vinculos = vinculosDoUsuario(organizations, session?.user?.email);
     if (!vinculos.length) return true;
-    return vinculos.some(v => podeVerDiretoria({ permissoes: v.member.permissions as unknown as Record<string, unknown> | undefined, acessoTotal: false }));
-  }, [isDevEmail, activeOrganizationId, currentMember, organizations, session?.user?.email]);
+    return vinculos.some(v => moduloLigadoNaOrg(v.org, 'diretoria')
+      && podeVerDiretoria({ permissoes: v.member.permissions as unknown as Record<string, unknown> | undefined, acessoTotal: false }));
+  }, [isDevEmail, activeOrganizationId, activeOrg, currentMember, organizations, session?.user?.email]);
 
   const isModuleAllowed = React.useCallback((
     userPermKey: string,
     matrixKey: string,
     padrao?: (naMesmaOrg: (userPermKey: string, matrixKey: string) => boolean) => boolean,
   ): boolean => {
+    // Módulo que a organização do topo desligou não abre para ninguém, desenvolvedor
+    // inclusive (docs/planos/2026-11-27-modulos-por-organizacao.md). Em "Todas", quem
+    // confere a org de cada vínculo é o `permitidoNaOrg`.
+    if (activeOrganizationId && activeOrg && !moduloLigadoNaOrg(activeOrg, matrixKey)) return false;
     // Desenvolvedores sempre têm acesso total
     if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail) return true;
     if (activeOrganizationId) {
@@ -414,11 +421,21 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = true;
     }
 
+    // Módulos da organização (27/11/2026): a tela de um módulo que a organização não tem
+    // não abre — inclusive as que não têm chave de usuário acima (Financeiro, Especialidades).
+    const moduloDaTelaAtual = moduloDaTela(activeView);
+    if (allowed && moduloDaTelaAtual && !moduloLigadoNoContexto({
+      activeOrg, organizations, email: session?.user?.email,
+      acessoTotal: currentProfile.group === 'DESENVOLVEDOR' || isDevEmail,
+    }, moduloDaTelaAtual)) {
+      allowed = false;
+    }
+
     if (!allowed) {
       console.warn(`[RouteGuard] Acesso bloqueado para a rota: ${activeView}. Redirecionando para dashboard.`);
       setActiveView('dashboard');
     }
-  }, [activeView, isModuleAllowed, podeAbrirDiretoria, isDevEmail, currentProfile.group, setActiveView]);
+  }, [activeView, isModuleAllowed, podeAbrirDiretoria, isDevEmail, currentProfile.group, setActiveView, activeOrg, organizations, session?.user?.email]);
 
   // ── Render interno (envolto em Suspense para lazy components) ───────────────
   const renderContent = () => {

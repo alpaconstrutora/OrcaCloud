@@ -120,7 +120,13 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                     console.error('[OrganizationPage] Falha ao reprocessar tributos após troca de regime:', err);
                 }
             }
-            await onUpdate(formData);
+            // `settings` vai do registro ATUAL (prop, recarregada a cada save) com só o que
+            // esta aba edita — o regime. O `formData` é a cópia de quando a ficha abriu:
+            // mandá-lo inteiro apagaria o que outra aba gravou depois (Módulos, 27/11/2026).
+            await onUpdate({
+                ...formData,
+                settings: { ...organization.settings, tax_recognition_regime: formData.settings?.tax_recognition_regime },
+            });
             setInitialRegime(newRegime);
             markSaved();
             setSavedAt(Date.now());

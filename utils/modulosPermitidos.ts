@@ -24,7 +24,7 @@ export interface EntradaModulos {
   isDevEmail: boolean;
 }
 
-export function modulosPermitidos({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail }: EntradaModulos) {
+function modulosDoUsuario({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail }: EntradaModulos) {
   const baseMods = activeEmpresa?.modulos_habilitados || {
     obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false
   };
@@ -38,15 +38,15 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
 
   if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, qualidade_siac: true, diretoria
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, qualidade_siac: true, rentals: true, diretoria
     };
   }
 
-  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false, qualidade_siac: baseMods.obras !== false, diretoria };
+  if (!currentMember) return { ...baseMods, rentals: Boolean(baseMods.crm), ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false, qualidade_siac: baseMods.obras !== false, diretoria };
 
   if (currentMember.role === 'admin') {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, qualidade_siac: true, diretoria
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, qualidade_siac: true, rentals: true, diretoria
     };
   }
 
@@ -155,6 +155,78 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
   };
 }
 
+// ── Módulos da ORGANIZAÇÃO (27/11/2026) ──────────────────────────────────────
+// Plano: docs/planos/2026-11-27-modulos-por-organizacao.md. A organização desliga um
+// módulo para TODOS que entram nela pelo topo — admin, owner, acesso total e
+// DESENVOLVEDOR inclusive: o módulo não existe para aquela organização (ex.: a org de
+// condomínio sem Engenharia). Gravado em `settings.modulos_da_organizacao` como
+// `{ chave: false }`; chave ausente = ligado, então nenhuma org muda até alguém desligar.
+
+export type ChaveModuloDaOrganizacao =
+  | 'obras' | 'riscos' | 'qualidade_siac' | 'rh' | 'treinamentos' | 'compras'
+  | 'financeiro' | 'fiscal' | 'crm' | 'rentals' | 'incorporacao' | 'broker_portal'
+  | 'diretoria' | 'pro' | 'offices' | 'reformas' | 'ecommerce';
+
+export interface ModuloDaOrganizacao {
+  chave: ChaveModuloDaOrganizacao;
+  titulo: string;
+  /** O que some do menu — os nomes que o usuário vê lá. */
+  descricao: string;
+  grupo: string;
+  /** Mora dentro da seção de outro módulo no menu: desligado o pai, desliga junto. */
+  dependeDe?: ChaveModuloDaOrganizacao;
+}
+
+/** O painel "Módulos" da ficha da organização lista estes, nesta ordem (a do menu). */
+export const MODULOS_DA_ORGANIZACAO: ModuloDaOrganizacao[] = [
+  { grupo: 'Gestão', chave: 'diretoria', titulo: 'Diretoria', descricao: 'Tela Diretoria (ÒPURA CEO). Continua exigindo a permissão de cada usuário.' },
+  { grupo: 'Operação', chave: 'obras', titulo: 'Engenharia', descricao: 'Obras, orçamentos, composições, planejamento, controle operacional, diário de obra e pós-obra.' },
+  { grupo: 'Operação', chave: 'riscos', titulo: 'Riscos', descricao: 'Fica dentro de Engenharia.', dependeDe: 'obras' },
+  { grupo: 'Operação', chave: 'qualidade_siac', titulo: 'Qualidade (SiAC)', descricao: 'Fica dentro de Engenharia.', dependeDe: 'obras' },
+  { grupo: 'Operação', chave: 'rh', titulo: 'Recursos Humanos', descricao: 'Colaboradores, folha, ponto, SST e Portal do Colaborador.' },
+  { grupo: 'Operação', chave: 'treinamentos', titulo: 'Treinamentos', descricao: 'Portal de Treinamentos (gestão).' },
+  { grupo: 'Operação', chave: 'compras', titulo: 'Suprimentos', descricao: 'Solicitações, cotações, pedidos, contratos, recebimento e almoxarifado.' },
+  { grupo: 'Financeiro', chave: 'financeiro', titulo: 'Financeiro', descricao: 'Contas a pagar e a receber, boletos, tributos, conciliação, dívidas e análises.' },
+  { grupo: 'Financeiro', chave: 'fiscal', titulo: 'Fiscal e NF-e', descricao: 'Notas fiscais.' },
+  { grupo: 'Comercial', chave: 'crm', titulo: 'Comercial', descricao: 'Vendas de ativos, condomínios, contratos de serviço e CRM de serviços.' },
+  { grupo: 'Comercial', chave: 'rentals', titulo: 'Locações', descricao: 'Contratos de locação.' },
+  { grupo: 'Comercial', chave: 'incorporacao', titulo: 'Incorporação', descricao: 'Empreendimentos, Planta Inteligente, viabilidade, oportunidades e laudo de avaliação.' },
+  { grupo: 'Comercial', chave: 'broker_portal', titulo: 'Portal do Corretor', descricao: 'Acesso ao Portal do Corretor pelo menu Portais.' },
+  { grupo: 'Especialidades', chave: 'pro', titulo: 'ÒPURA Pro', descricao: 'Painel ÒPURA Pro.' },
+  { grupo: 'Especialidades', chave: 'offices', titulo: 'ÒPURA Offices', descricao: 'Painel ÒPURA Offices.' },
+  { grupo: 'Especialidades', chave: 'reformas', titulo: 'ÒPURA Reformas', descricao: 'Painel ÒPURA Reformas.' },
+  { grupo: 'Especialidades', chave: 'ecommerce', titulo: 'ÒPURA E-commerce', descricao: 'E-commerce, CNO e Previdência, Governança Corporativa.' },
+];
+
+/** Pós-Obra (`quality`) não tem interruptor: o item mora em Engenharia, segue Engenharia. */
+const DEPENDE_DE: Record<string, string> = {
+  ...Object.fromEntries(MODULOS_DA_ORGANIZACAO.filter(m => m.dependeDe).map(m => [m.chave, m.dependeDe as string])),
+  quality: 'obras',
+};
+
+/** A organização tem o módulo? Sem org (ou sem nada gravado) = tem. */
+export function moduloLigadoNaOrg(org: Pick<Organization, 'settings'> | null | undefined, chave: string): boolean {
+  const desligados = org?.settings?.modulos_da_organizacao as Record<string, boolean> | undefined;
+  if (!desligados) return true;
+  if (desligados[chave] === false) return false;
+  const pai = DEPENDE_DE[chave];
+  return pai ? moduloLigadoNaOrg(org, pai) : true;
+}
+
+function aplicarModulosDaOrg<T extends object>(modulos: T, org: Organization | undefined): T {
+  if (!org?.settings?.modulos_da_organizacao) return modulos;
+  const r = { ...modulos } as Record<string, unknown>;
+  for (const chave of new Set([...Object.keys(r), ...MODULOS_DA_ORGANIZACAO.map(m => m.chave)])) {
+    if (!moduloLigadoNaOrg(org, chave)) r[chave] = false;
+  }
+  return r as T;
+}
+
+/** O que o usuário vê NUMA organização: a permissão dele, recortada pelos módulos da org. */
+export function modulosPermitidos(entrada: EntradaModulos) {
+  return aplicarModulosDaOrg(modulosDoUsuario(entrada), entrada.activeOrg);
+}
+
 export type ModulosPermitidos = ReturnType<typeof modulosPermitidos>;
 
 // ── "Todas as organizações" (15/11/2026) ─────────────────────────────────────
@@ -200,7 +272,7 @@ export function modulosPermitidosNoContexto(entrada: EntradaModulos & { organiza
     // em "Todas", sem membro ativo, vale a flag em alguma organização do usuário — a mesma conta do
     // guard do AppRouter (revisão de 17/11; antes o menu escondia e a rota abria).
     if (!base.activeOrg && !base.isDevEmail && !m.diretoria
-        && vinculosDoUsuario(organizations, email).some(v => podeVerDiretoria({
+        && vinculosDoUsuario(organizations, email).some(v => moduloLigadoNaOrg(v.org, 'diretoria') && podeVerDiretoria({
           permissoes: v.member.permissions as unknown as Record<string, unknown> | undefined, acessoTotal: false,
         }))) {
       return { ...m, diretoria: true };
@@ -228,6 +300,8 @@ export function permitidoNaOrg(
   matrixKey: string,
   padrao?: (naMesmaOrg: (userPermKey: string, matrixKey: string) => boolean) => boolean,
 ): boolean {
+  // Módulo que a organização desligou não abre para ninguém — admin inclusive.
+  if (!moduloLigadoNaOrg(org, matrixKey)) return false;
   if (member.role === 'admin') return true;
   const roleId = member.customRoleId || member.role;
   const matrix = (org?.settings?.module_visibility || {}) as Record<string, unknown>;
@@ -258,6 +332,50 @@ export const MODULO_DO_ITEM_DE_BUSCA: Record<string, keyof ModulosPermitidos> = 
   empreendimentos: 'incorporacao', 'regulatory-maps': 'incorporacao', imovib: 'incorporacao',
   treinamentos: 'treinamentos', 'labor-portal': 'rh',
 };
+
+/**
+ * Telas de módulo que o guard de rota não confere por chave de usuário (não há
+ * `canView*` para elas): só a organização as desliga. Junto com a tabela da busca,
+ * diz ao guard "esta tela é do módulo X" (27/11/2026).
+ */
+const TELAS_SEM_CHAVE_DE_USUARIO: Record<string, ChaveModuloDaOrganizacao> = {
+  ...Object.fromEntries([
+    'contas-a-receber', 'financial-boletos', 'contas-a-pagar', 'boletos-pagar', 'tributos-a-pagar',
+    'dividas-financiamentos', 'credit-rooms', 'bank-reconciliation', 'conta-asaas', 'financial-calendar',
+    'dunning', 'financial-approval', 'fluxo-financeiro', 'financial-dashboard', 'fpa-module',
+    'financial-intelligence', 'project-financial', 'financial-dre', 'financial-cashflow',
+  ].map(id => [id, 'financeiro' as const])),
+  // Engenharia: o 'dashboard' fica de fora — é o destino do redirecionamento do guard.
+  ...Object.fromEntries([
+    'org-type-templates', 'reports', 'estrutural', 'project-settings', 'eng-obra-types',
+    'operacional', 'project-diary',
+  ].map(id => [id, 'obras' as const])),
+  'service-contracts': 'crm', 'services-commercial': 'crm',
+  blueprint: 'incorporacao', opportunities: 'incorporacao', 'bim-viewer': 'incorporacao',
+  'reformas-dashboard': 'reformas',
+  'ecommerce-dashboard': 'ecommerce', 'opura-cno': 'ecommerce', 'opura-governance': 'ecommerce',
+  'broker-area': 'broker_portal',
+};
+
+/** De que módulo é a tela (`activeView`), quando é de algum. */
+export function moduloDaTela(view: string): string | undefined {
+  return MODULO_DO_ITEM_DE_BUSCA[view] ?? TELAS_SEM_CHAVE_DE_USUARIO[view];
+}
+
+/**
+ * O módulo existe no contexto do topo? Com organização: a dela. Em "Todas": em pelo
+ * menos uma organização do usuário (a mesma união do menu); acesso total vê tudo;
+ * sem vínculo conhecido (lista carregando) não bloqueia.
+ */
+export function moduloLigadoNoContexto(
+  ctx: { activeOrg: Organization | undefined; organizations: Organization[]; email?: string | null; acessoTotal: boolean },
+  chave: string,
+): boolean {
+  if (ctx.activeOrg) return moduloLigadoNaOrg(ctx.activeOrg, chave);
+  if (ctx.acessoTotal) return true;
+  const vinculos = vinculosDoUsuario(ctx.organizations, ctx.email);
+  return !vinculos.length || vinculos.some(v => moduloLigadoNaOrg(v.org, chave));
+}
 
 /** Mesmo cálculo do menu, a partir do store — para telas fora do `Layout`. */
 export function useModulosPermitidos(profile: { group: string; email?: string }): ModulosPermitidos {

@@ -592,6 +592,12 @@ export interface Organization {
          * Ver aplicar_20271012001000_organizacao_matriz_fonte_unica.sql.
          */
         tipo_pessoa?: 'PF' | 'PJ';
+        /**
+         * Módulos que a ORGANIZAÇÃO desligou para todos os seus membros (`{ obras: false }`).
+         * Chave ausente = ligado. Catálogo e regra em utils/modulosPermitidos.ts
+         * (`MODULOS_DA_ORGANIZACAO`, `moduloLigadoNaOrg`); painel na ficha › Módulos.
+         */
+        modulos_da_organizacao?: Record<string, boolean>;
     };
     resources?: {
         roles: ResourceRole[];

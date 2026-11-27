@@ -3,6 +3,7 @@ import { PurchaseOrder, PurchaseOrderItem, FinancialTransaction } from '../types
 import { notificationService } from './notificationService';
 import { supplierService, getSupplierDisplayName } from './supplierService';
 import { financialService } from './financialService';
+import { criarEfeitosDoStatus } from './pedidoStatusEfeitos';
 import { sanitizeFileName } from '../utils/storageUtils';
 import { receiptService, CreateReceiptItemInput } from './receiptService';
 import { discrepancyService } from './discrepancyService';
@@ -30,6 +31,27 @@ function duplicateNumberError(error: { code?: string; message?: string }, number
         );
     }
     return error instanceof Error ? error : new Error(error?.message || 'Erro ao salvar o pedido.');
+}
+
+/**
+ * Efeitos da mudança de status com os serviços do navegador (os testes espionam
+ * estes serviços). A Edge `pedido-recebimento` monta os mesmos efeitos com o
+ * cliente do banco (`depsComBanco`).
+ */
+function efeitosDoStatusNoNavegador() {
+    return criarEfeitosDoStatus({
+        emailDoFornecedor: async (supplierId) => (await supplierService.getById(supplierId))?.email || null,
+        notificar: (aviso) => notificationService.sendNotification(aviso),
+        registrarLog: (entrada) => notificationLogService.log(entrada),
+        financeiro: financialService,
+        processos: processService,
+        orgDaEmpresa: async (empresaId) =>
+            (await supabase.from('companies').select('org_id').eq('id', empresaId).maybeSingle()).data?.org_id ?? null,
+        textos: {
+            assunto: (p) => appSettingsService.interpolateEmailSubject(p),
+            corpo: (p) => appSettingsService.interpolateEmailBody(p),
+        },
+    });
 }
 
 export const orderService = {
@@ -301,6 +323,8 @@ export const orderService = {
         if (res?.reason === 'status') throw new Error('O valor cotado não pode mais ser alterado neste estágio do pedido.');
         // FOB (aplicar_20271019987000): a logística é do comprador.
         if (res?.reason === 'fob') throw new Error('Pedido FOB: a retirada e as datas de logística são registradas pelo comprador.');
+        // Recebimento (aplicar_20271127300200): conferido, o status é do comprador.
+        if (res?.reason === 'recebido') throw new Error('O comprador já conferiu este pedido: o status não muda mais pelo fornecedor.');
         if (res?.reason === 'forbidden') {
             const { quotes, ...resto } = updates;
             const comCotacao = quotes && quotes.length > 0
@@ -396,81 +420,10 @@ export const orderService = {
         if (refetchError || !data) throw new Error('Pedido não encontrado após atualização.');
 
         if (updates.status) {
-            // 1. Notify Supplier
-            try {
-                if (data.supplier_id) {
-                    const supplierData = await supplierService.getById(data.supplier_id);
-                    if (supplierData?.email) {
-                        const subject = appSettingsService.interpolateEmailSubject({ orderNumber: data.number || '', newStatus: updates.status });
-                        const body    = appSettingsService.interpolateEmailBody({ orderNumber: data.number || '', newStatus: updates.status });
-                        await notificationService.sendNotification({
-                            recipientEmail: supplierData.email,
-                            title: subject,
-                            message: body,
-                            link: `/supplier-portal?tab=orders&order=${data.id}`,
-                            type: 'status_change'
-                        });
-                        notificationLogService.log({
-                            orderId: data.id,
-                            channel: 'email',
-                            recipient: supplierData.email,
-                            subject,
-                            body,
-                            status: 'sent',
-                            metadata: { status: updates.status },
-                        });
-                    }
-                }
-            } catch (notifyErr: unknown) {
-                const notifyError = notifyErr instanceof Error ? notifyErr : new Error(String(notifyErr));
-                console.error("[NOTIFICATION SYSTEM] Failed to trigger notification:", notifyError.message);
-                notificationLogService.log({
-                    orderId: data.id,
-                    channel: 'email',
-                    status: 'failed',
-                    error: notifyError.message,
-                    metadata: { status: updates.status },
-                });
-            }
-
-            // 2. Trigger Financial Sync if Entregue, Recebido or Divergência
-            if (['Entregue', 'Recebido', 'Divergência'].includes(updates.status)) {
-                try {
-                    await financialService.syncOrderToFinance(id);
-                } catch (finError) {
-                    console.error("[ORDER SERVICE] Financial sync failed:", finError);
-                }
-            }
-
-            // 2b. Costura P2P — dispara templates de Processos (EVENTO) para
-            // Recebido/Divergência. Best-effort: nunca deve derrubar o pedido.
-            if (['Recebido', 'Divergência'].includes(updates.status)) {
-                try {
-                    const eventKey = updates.status === 'Recebido' ? 'purchase_order.received' : 'purchase_order.divergence';
-                    // A org é a DO PEDIDO. Quando este gancho nasceu (F2, 07/2026) a
-                    // tabela não tinha `organization_id` e o caminho era
-                    // `empresa_id → companies.org_id`. Hoje a coluna existe e, medido
-                    // em 28/09/2026, DIVERGE de `companies.org_id` nos 2 pedidos
-                    // recebidos reais — pela via antiga a instância nascia na org da
-                    // empresa, não na do pedido. A empresa fica só como fallback para
-                    // pedido antigo sem `organization_id`.
-                    // docs/planos/2026-09-28-torre-p2p-processos.md (Passo 1.1)
-                    const orgId = data.organization_id
-                        ?? (data.empresa_id
-                            ? (await supabase.from('companies').select('org_id').eq('id', data.empresa_id).maybeSingle()).data?.org_id
-                            : null);
-                    if (orgId) {
-                        await processService.triggerEvent(orgId, eventKey, {
-                            title: `Pedido ${data.number} — ${updates.status}`,
-                            purchaseOrderId: data.id,
-                            supplierId: data.supplier_id ?? undefined,
-                            projectId: data.project_id ?? undefined,
-                        });
-                    }
-                } catch (procError) {
-                    console.error("[ORDER SERVICE] Process trigger failed:", procError);
-                }
-            }
+            // 1, 2 e 2b — aviso ao fornecedor, parcelas a pagar e processos: o MESMO
+            // código que a Edge `pedido-recebimento` roda (services/pedidoStatusEfeitos.ts),
+            // aqui com os serviços do navegador.
+            await efeitosDoStatusNoNavegador().aplicar(data, updates.status);
 
             // 3. WhatsApp automático quando status muda para Enviado.
             // Desde 18/11/2026 (achado F75) o token é da ORGANIZAÇÃO, no servidor:

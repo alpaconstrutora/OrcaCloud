@@ -240,6 +240,8 @@ export const supplierPortalTokenService = {
     const res = data as any;
     // FOB (aplicar_20271019987000): a logística é do comprador.
     if (res?.reason === 'fob') throw new Error('Pedido FOB: a retirada e as datas de logística são registradas pelo comprador.');
+    // Recebimento (aplicar_20271127300200): conferido, o status é do comprador.
+    if (res?.reason === 'recebido') throw new Error('O comprador já conferiu este pedido: o status não muda mais pelo fornecedor.');
     return res?.valid ? mapOrderRow(res.data) : null;
   },
 

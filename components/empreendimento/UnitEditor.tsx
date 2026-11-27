@@ -704,9 +704,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
               <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
             </colgroup>
             <thead>
-              <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
+              <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                 {/* Checkbox select-all */}
-                <th className="py-3 px-3 w-10">
+                <th className="py-3 px-3 w-10 border-r border-gray-100">
                   <input
                     type="checkbox"
                     checked={allSelected}
@@ -719,7 +719,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                 {vis('floor') && <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor" />}>Pav.</SortableHeader>}
                 {vis('floor_tipo') && <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor_tipo" />}>Tipo Pav.</SortableHeader>}
                 {/* Elevação do andar da unidade (28/10/2026): a mesma da seção Pavimentos — calculada ou digitada. */}
-                {vis('elevacao') && <th className="relative overflow-hidden py-2.5 px-4 text-table-header font-semibold text-gray-500 whitespace-nowrap">Elevação<cols.ResizeHandle colKey="elevacao" /></th>}
+                {vis('elevacao') && <th className="relative overflow-hidden py-2.5 px-4 text-table-header font-semibold text-gray-700 whitespace-nowrap border-r border-gray-100">Elevação<cols.ResizeHandle colKey="elevacao" /></th>}
                 {vis('typology') && <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="typology" />}>Tipologia</SortableHeader>}
                 {vis('private_area') && <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="private_area" />}>Priv. m²</SortableHeader>}
                 {vis('common_area') && <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="common_area" />}>Comum m²</SortableHeader>}
@@ -730,11 +730,11 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                 {vis('position_type') && <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="position_type" />}>Posição</SortableHeader>}
                 {vis('view_type') && <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="view_type" />}>Vista</SortableHeader>}
                 {vis('sun_orientation') && <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="sun_orientation" />}>Orient.</SortableHeader>}
-                <th aria-hidden="true"></th>
-                <th className="py-2.5 px-4 text-center text-table-header font-semibold text-gray-500">Ações</th>
+                <th aria-hidden="true" className="border-r border-gray-100"></th>
+                <th className="py-2.5 px-4 text-center text-table-header font-semibold text-gray-700">Ações</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {groups.map(group => {
                 const collapsed = agrupamento.recolhidos.has(group.key);
                 const allGroupSelected = group.units.every(u => selected.has(u.id));
@@ -744,7 +744,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                   <React.Fragment key={group.key}>
                     {/* Cabeçalho do grupo — sem agrupamento, a lista corre sem ele */}
                     {agrupamento.agrupando && (
-                    <tr className="bg-gray-50/70 border-b border-gray-100 hover:bg-gray-100/60 transition-colors">
+                    <tr className="bg-gray-50/70 hover:bg-gray-100/60 transition-colors">
                       {/* Checkbox do grupo */}
                       <td className="py-2 px-3 w-10">
                         <input
@@ -825,9 +825,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                       const isEditing = editingId === u.id;
                       const isSelected = selected.has(u.id);
                       return (
-                        <tr key={u.id} className={`border-b border-gray-50 transition-colors ${isEditing ? 'bg-blue-50/30' : isSelected ? 'bg-blue-50/20' : 'hover:bg-gray-50/40'}`}>
+                        <tr key={u.id} className={`transition-colors ${isEditing ? 'bg-blue-50/30' : isSelected ? 'bg-blue-50/20' : 'hover:bg-gray-50/40'}`}>
                           {/* Checkbox */}
-                          <td className="py-2 px-3 w-10">
+                          <td className="border-r border-gray-100 last:border-r-0 py-2 px-3 w-10">
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -838,10 +838,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
 
                           {isEditing ? (
                             <>
-                              <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
-                              {vis('floor') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>}
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
+                              {vis('floor') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>}
                               {vis('floor_tipo') && (
-                              <td className="py-2 px-3">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3">
                                 <select value={editForm.floor_tipo} onChange={e => setEditForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))} className={editCls}>
                                   <option value="">— Tipo</option>
                                   {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
@@ -849,19 +849,19 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                               </td>
                               )}
                               {vis('elevacao') && (
-                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap" title="A elevação é do pavimento — mude na seção Pavimentos">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3 text-sm text-gray-700 whitespace-nowrap" title="A elevação é do pavimento — mude na seção Pavimentos">
                                 {textoDaElevacao(editForm.floor === '' ? null : Number(editForm.floor))}
                               </td>
                               )}
-                              {vis('typology') && <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>}
-                              {vis('private_area') && <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>}
-                              {vis('common_area') && <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>}
-                              {vis('bedrooms') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bedrooms} onChange={e => setEditForm(p => ({ ...p, bedrooms: e.target.value }))} /></td>}
-                              {vis('bathrooms') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bathrooms} onChange={e => setEditForm(p => ({ ...p, bathrooms: e.target.value }))} /></td>}
-                              {vis('suites') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.suites} onChange={e => setEditForm(p => ({ ...p, suites: e.target.value }))} /></td>}
-                              {vis('parking_spaces') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>}
+                              {vis('typology') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>}
+                              {vis('private_area') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>}
+                              {vis('common_area') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>}
+                              {vis('bedrooms') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" value={editForm.bedrooms} onChange={e => setEditForm(p => ({ ...p, bedrooms: e.target.value }))} /></td>}
+                              {vis('bathrooms') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" value={editForm.bathrooms} onChange={e => setEditForm(p => ({ ...p, bathrooms: e.target.value }))} /></td>}
+                              {vis('suites') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" value={editForm.suites} onChange={e => setEditForm(p => ({ ...p, suites: e.target.value }))} /></td>}
+                              {vis('parking_spaces') && <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>}
                               {vis('position_type') && (
-                              <td className="py-2 px-3">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3">
                                 <select value={editForm.position_type} onChange={e => setEditForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))} className={editCls}>
                                   <option value="">—</option>
                                   {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
@@ -869,7 +869,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                               </td>
                               )}
                               {vis('view_type') && (
-                              <td className="py-2 px-3">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3">
                                 <select value={editForm.view_type} onChange={e => setEditForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))} className={editCls}>
                                   <option value="">—</option>
                                   {(Object.keys(VIEW_LABEL) as UnitViewType[]).map(t => <option key={t} value={t}>{VIEW_LABEL[t]}</option>)}
@@ -877,15 +877,15 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                               </td>
                               )}
                               {vis('sun_orientation') && (
-                              <td className="py-2 px-3">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3">
                                 <select value={editForm.sun_orientation} onChange={e => setEditForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))} className={editCls}>
                                   <option value="">—</option>
                                   {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
                                 </select>
                               </td>
                               )}
-                              <td aria-hidden="true"></td>
-                              <td className="py-2 px-3 text-center">
+                              <td aria-hidden="true" className="border-r border-gray-100"></td>
+                              <td className="border-r border-gray-100 last:border-r-0 py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]"><Check className="w-3.5 h-3.5" /></button>
                                   <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-[6px]"><X className="w-3.5 h-3.5" /></button>
@@ -894,50 +894,50 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                             </>
                           ) : (
                             <>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
-                              {vis('floor') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>}
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
+                              {vis('floor') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>}
                               {vis('floor_tipo') && (
-                              <td className="py-2.5 px-4 text-sm font-normal">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal">
                                 {u.floor_tipo
                                   ? <span className={textColor(FLOOR_TIPO_STYLE[u.floor_tipo])}>{FLOOR_TIPO_LABEL[u.floor_tipo]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
                               )}
                               {vis('elevacao') && (
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600 whitespace-nowrap" data-testid="elevacao-da-unidade">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600 whitespace-nowrap" data-testid="elevacao-da-unidade">
                                 {textoDaElevacao(u.floor ?? null)}
                               </td>
                               )}
-                              {vis('typology') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.typology || '—'}</td>}
-                              {vis('private_area') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>}
-                              {vis('common_area') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>}
-                              {vis('bedrooms') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>}
-                              {vis('bathrooms') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>}
-                              {vis('suites') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.suites ?? '—'}</td>}
-                              {vis('parking_spaces') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>}
+                              {vis('typology') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.typology || '—'}</td>}
+                              {vis('private_area') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>}
+                              {vis('common_area') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>}
+                              {vis('bedrooms') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>}
+                              {vis('bathrooms') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>}
+                              {vis('suites') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.suites ?? '—'}</td>}
+                              {vis('parking_spaces') && <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>}
                               {vis('position_type') && (
-                              <td className="py-2.5 px-4 text-sm font-normal">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal">
                                 {u.position_type
                                   ? <span className={textColor(POSITION_STYLE[u.position_type])}>{POSITION_LABEL[u.position_type]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
                               )}
                               {vis('view_type') && (
-                              <td className="py-2.5 px-4 text-sm font-normal">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal">
                                 {u.view_type
                                   ? <span className={textColor(VIEW_STYLE[u.view_type])}>{VIEW_LABEL[u.view_type]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
                               )}
                               {vis('sun_orientation') && (
-                              <td className="py-2.5 px-4 text-sm font-normal">
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-sm font-normal">
                                 {u.sun_orientation
                                   ? <span className={textColor(SUN_STYLE[u.sun_orientation])}>{SUN_LABEL[u.sun_orientation]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
                               )}
-                              <td aria-hidden="true"></td>
-                              <td className="py-2.5 px-4 text-center">
+                              <td aria-hidden="true" className="border-r border-gray-100"></td>
+                              <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   {([-1, 1] as const).map(passo => {
                                     const i = group.units.indexOf(u);
@@ -1218,7 +1218,7 @@ const SortableHeader: React.FC<{
   return (
     <th
       onClick={() => onSort(col)}
-      className={`relative overflow-hidden py-2.5 px-4 text-table-header font-semibold cursor-pointer select-none transition-colors ${active ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+      className={`relative overflow-hidden py-2.5 px-4 text-table-header font-semibold cursor-pointer select-none transition-colors border-r border-gray-100 ${active ? 'text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
     >
       <div className="flex items-center gap-1">
         {children}

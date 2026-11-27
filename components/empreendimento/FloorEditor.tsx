@@ -295,19 +295,19 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange, unidades =
         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-gray-100 text-gray-500 font-semibold bg-gray-50/50">
-                <th className="py-2.5 px-4">Nome</th>
-                <th className="py-2.5 px-4">Tipo</th>
-                <th className="py-2.5 px-4">Nº inicial</th>
-                <th className="py-2.5 px-4">Repete</th>
-                <th className="py-2.5 px-4">Un./pav.</th>
-                <th className="py-2.5 px-4">Pé-direito</th>
-                <th className="py-2.5 px-4">Elevação</th>
-                <th className="py-2.5 px-4">Andares</th>
+              <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                <th className="py-2.5 px-4 border-r border-gray-100">Nome</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Tipo</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Nº inicial</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Repete</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Un./pav.</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Pé-direito</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Elevação</th>
+                <th className="py-2.5 px-4 border-r border-gray-100">Andares</th>
                 <th className="py-2.5 px-4 text-center">Ações</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {floors.map(f => {
                 const isEd = editingId === f.id;
                 const upf = f.units_per_floor ?? tower.units_per_floor;
@@ -318,33 +318,33 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange, unidades =
                   ? labelFloor(f.floor_number, f.tipo)
                   : `${labelFloor(f.floor_number, f.tipo)} → ${labelFloor(f.floor_number + f.repeat_count - 1, f.tipo)}`;
                 return (
-                  <tr key={f.id} className={`border-b border-gray-50 ${isEd ? 'bg-blue-50/30' : 'hover:bg-gray-50/40'}`}>
+                  <tr key={f.id} className={`${isEd ? 'bg-blue-50/30' : 'hover:bg-gray-50/40'}`}>
                     {isEd ? (
                       <>
-                        <td className="py-2 px-3"><input className={editCls + ' w-full'} value={editForm.name}
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls + ' w-full'} value={editForm.name}
                           onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
-                        <td className="py-2 px-3">
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3">
                           <select className={editCls + ' w-full'} value={editForm.tipo}
                             onChange={e => setEditForm(p => ({ ...p, tipo: e.target.value as FloorTipo }))}>
                             {TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                           </select>
                         </td>
-                        <td className="py-2 px-3"><input className={editCls + ' w-16'} type="number" value={editForm.floor_number}
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls + ' w-16'} type="number" value={editForm.floor_number}
                           onChange={e => setEditForm(p => ({ ...p, floor_number: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls + ' w-16'} type="number" min="1" value={editForm.repeat_count}
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls + ' w-16'} type="number" min="1" value={editForm.repeat_count}
                           onChange={e => setEditForm(p => ({ ...p, repeat_count: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls + ' w-16'} type="number" min="1" value={editForm.units_per_floor}
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls + ' w-16'} type="number" min="1" value={editForm.units_per_floor}
                           onChange={e => setEditForm(p => ({ ...p, units_per_floor: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls + ' w-16'} inputMode="decimal" aria-label="Pé-direito (m)"
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls + ' w-16'} inputMode="decimal" aria-label="Pé-direito (m)"
                           placeholder={tower.pe_direito_padrao_m != null ? fmtPeDireito(tower.pe_direito_padrao_m) : '—'} value={editForm.pe_direito_m}
                           onChange={e => setEditForm(p => ({ ...p, pe_direito_m: e.target.value }))} /></td>
-                        <td className="py-2 px-3"><input className={editCls + ' w-20'} inputMode="decimal" aria-label="Elevação (m)"
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3"><input className={editCls + ' w-20'} inputMode="decimal" aria-label="Elevação (m)"
                           placeholder={elevDe != null ? fmtElevacao(elevDe) : 'calculada'} value={editForm.elevacao_m}
                           onChange={e => setEditForm(p => ({ ...p, elevacao_m: e.target.value }))} /></td>
-                        <td className="py-2 px-3 text-gray-400 italic text-xs">
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3 text-gray-400 italic text-xs">
                           {previewRange(editForm.floor_number, editForm.repeat_count, editForm.tipo)}
                         </td>
-                        <td className="py-2 px-3 text-center">
+                        <td className="border-r border-gray-100 last:border-r-0 py-2 px-3 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <button onClick={() => handleSaveEdit(f)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]"><Check className="w-3.5 h-3.5" /></button>
                             <button onClick={() => setEditingId(null)} className="p-1.5 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-[6px]"><X className="w-3.5 h-3.5" /></button>
@@ -353,21 +353,21 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange, unidades =
                       </>
                     ) : (
                       <>
-                        <td className="py-2.5 px-4 font-normal text-gray-800">{f.name}</td>
-                        <td className="py-2.5 px-4">
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 font-normal text-gray-800">{f.name}</td>
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4">
                           <span className={`text-xs font-normal ${TIPO_STYLE[f.tipo]}`}>
                             {TIPO_OPTIONS.find(o => o.value === f.tipo)?.label ?? f.tipo}
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 text-gray-500 font-normal">{f.floor_number}</td>
-                        <td className="py-2.5 px-4 text-gray-500 font-normal">
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-gray-500 font-normal">{f.floor_number}</td>
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-gray-500 font-normal">
                           {f.repeat_count > 1 ? <span className="text-blue-600">{f.repeat_count}×</span> : '1×'}
                         </td>
-                        <td className="py-2.5 px-4 text-gray-500 font-normal">{upf != null ? upf : <span className="text-gray-300">—</span>}</td>
-                        <td className="py-2.5 px-4 text-gray-500 font-normal" title={f.pe_direito_m == null && pd != null ? 'Padrão da torre' : undefined}>
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-gray-500 font-normal">{upf != null ? upf : <span className="text-gray-300">—</span>}</td>
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-gray-500 font-normal" title={f.pe_direito_m == null && pd != null ? 'Padrão da torre' : undefined}>
                           {pd != null ? `${fmtPeDireito(pd)} m${f.pe_direito_m == null ? ' (torre)' : ''}` : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="py-2.5 px-4 text-gray-500 font-normal whitespace-nowrap"
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-gray-500 font-normal whitespace-nowrap"
                           title={f.elevacao_m != null ? 'Digitada' : 'Calculada: a elevação do térreo da torre + os pés-direitos de baixo (3,00 m onde não há)'}>
                           {elevDe != null
                             ? <>
@@ -377,8 +377,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange, unidades =
                               </>
                             : <span className="text-gray-300">—</span>}
                         </td>
-                        <td className="py-2.5 px-4 text-gray-500 text-xs font-normal">{rangeStr}</td>
-                        <td className="py-2.5 px-4 text-center">
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-gray-500 text-xs font-normal">{rangeStr}</td>
+                        <td className="border-r border-gray-100 last:border-r-0 py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(f)} />
                             <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(f)} />

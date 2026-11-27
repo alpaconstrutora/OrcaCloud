@@ -42,7 +42,7 @@ qual conta Asaas o condomínio vai usar (ou avisa que não há nenhuma, com o at
   (faixa, botão desligado com o mesmo motivo, atalho para Contas) e conta emprestada em sandbox. tsc 0;
   `check-ui-standard` 0.
 - [x] PR + CI + publicação — PR #788, todos os jobs verdes (o leve caiu 1× em `PortalHelpSettings`, de outro módulo, passou 3/3 local e na nova rodada); squash `c418db6`; CI de `main` verde; domínio serve `c418db6`.
-- [ ] Conferir na tela publicada (Bella Vista › Financeiro): a faixa "Nenhuma conta Asaas…" com "Cadastrar conta" (Chrome desconectado em 27/11).
+- [ ] Conferir na tela publicada (Bella Vista › Financeiro): a faixa "Nenhuma conta Asaas…" com "Cadastrar conta" (Chrome desconectado em 27/11) — ver Pendências.
 
 ---
 
@@ -92,4 +92,44 @@ Respondi o que entendi e perguntei onde fica o campo e para que serve a conta:
 - [x] Tela: campo na Ficha (desligado com o motivo quando o condomínio não tem org própria); `utils/contaDoCondominio.ts`
   (`contaDoCondominio.test`, 2); `condominioFichaConta.test` (2). Testes do condomínio 19 arquivos / 299 verdes.
   tsc 0; `check-ui-standard` 0.
-- [ ] PR + CI + publicação.
+- [x] PR + CI + publicação — PR #791, todos os jobs verdes; squash `8d713cb`; CI de `main` verde; domínio serve `8d713cb`.
+- [ ] Conferir na tela publicada (Bella Vista › Ficha): o campo "Conta" com as contas agrupadas por organização — ver Pendências.
+
+---
+
+## Decisões do usuário sobre o que ficou de fora (27/11/2026)
+
+Resposta, literal, ao "Ficou de fora" do relatório do #791:
+
+> 1. Lançamentos que já existem não mudam. De acordo
+> 2. Limpar o campo não desfaz o vínculo. Não entendi.
+> 3. O #788 continua como você pediu. ok
+> 4. atualize o status do plano de implementação e pendencias
+
+- **Lançamentos antigos:** ficam como estão (165 em aberto sem conta nas orgs dos condomínios em 27/11). Só os
+  lançamentos novos recebem a conta do condomínio.
+- **#788 mantido:** a faixa do Financeiro mostra a conta **Asaas** (a que emite boleto), que pode não ser a conta
+  escolhida na Ficha.
+- **Vínculo "Atende também":** expliquei o comportamento (abaixo); a decisão está pendente.
+
+## Status (27/11/2026)
+
+| Parte | O quê | Estado |
+|---|---|---|
+| 1ª (#788) | Faixa "Boletos saem pela conta…" no Financeiro + Emitir desligado sem conta | no ar (`c418db6`); falta conferir na tela |
+| 2ª (#791) | Campo "Conta" na Ficha + gatilho "vale para tudo" | no ar (`8d713cb`); falta conferir na tela |
+
+## Pendências
+
+- [ ] **Conferir as duas telas publicadas** no Bella Vista (Financeiro e Ficha), desktop e celular. Bloqueio: o Chrome
+  estava desconectado em 27/11. Pronto quando: print da faixa e do campo, sem rolagem lateral em 390px.
+- [ ] **Decisão do usuário — vínculo ao limpar/trocar a conta.** Salvar na Ficha uma conta de OUTRA organização marca
+  "Atende também: <condomínio>" na conta (Minha Organização › Contas). Trocar a Ficha para "Nenhuma" ou outra conta
+  NÃO desmarca: a conta antiga segue nas listas do condomínio, inclusive no Portal do Síndico. Opções: (a) manter
+  assim (desmarca à mão em Contas); (b) a Ficha desmarca sozinha quando a conta sai — só se o vínculo foi criado por
+  ela e nenhum lançamento do condomínio usa a conta. Pronto quando: o usuário escolher e, se (b), a prova em bloco
+  desfeito mostrar o vínculo sumindo só nesse caso.
+- [ ] **Escolher a conta** do Bella Vista e do Galeria Altavista na Ficha (usuário). Hoje nenhum tem conta escolhida,
+  então o gatilho ainda não age em nada.
+- [ ] **Boleto/PIX (G2c do Portal do Síndico)** depende de uma conta Asaas no CNPJ do condomínio — fica no plano
+  `2026-10-24-portal-sindico-gestao-completa.md`, não aqui.

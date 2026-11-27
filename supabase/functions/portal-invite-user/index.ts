@@ -36,6 +36,15 @@ declare const Deno: { env: { get(key: string): string | undefined } };
  *
  * O link nunca volta para o cliente — só vai no e-mail.
  *
+ * Morador pelo Portal do Síndico (G6, 26/11/2026, docs/planos/2026-10-24-portal-sindico-
+ * gestao-completa.md): corpo { portal: 'cliente', id: <cliente>, sindico: { token?,
+ * clientId?, empreendimentoId } }. O síndico é EXTERNO (não é membro): no lugar de
+ * `exigirMembro`, `sindico_portal_morador_autorizar_convite` com a credencial de QUEM
+ * CHAMOU — síndico logado ou a administradora pelo app, ocupante VIGENTE daquele
+ * condomínio, com e-mail. A org do token é a do cadastro (o banco devolve). O link do
+ * Portal do Cliente abre tudo o que a pessoa tem com a organização: por isso ele só vai
+ * no e-mail — o síndico nunca o vê.
+ *
  * REGRA #7, pergunta 3: o gate está no código (exigirUsuario + exigirMembro),
  * não só no `verify_jwt`.
  *
@@ -109,14 +118,16 @@ serve(async (req: Request) => {
 
     let portal: Portal | undefined;
     let id: string | undefined;
+    let pelaPortaDoSindico: { token?: unknown; clientId?: unknown; empreendimentoId?: unknown } | undefined;
     try {
-        ({ portal, id } = await req.json());
+        ({ portal, id, sindico: pelaPortaDoSindico } = await req.json());
     } catch {
         return json({ error: 'Corpo inválido.' }, 400);
     }
     if (!portal || !(portal in PORTAIS)) return json({ error: 'portal deve ser cliente, fornecedor, corretor ou sindico.' }, 400);
     if (!id || !UUID.test(id)) return json({ error: 'id é obrigatório.' }, 400);
     const d = PORTAIS[portal];
+    if (pelaPortaDoSindico !== undefined && portal !== 'cliente') return json({ error: 'Pelo Portal do Síndico só se convida morador (portal cliente).' }, 400);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -150,12 +161,35 @@ serve(async (req: Request) => {
     const { data: cad } = await admin.from(d.tabela).select(colunas).eq('id', idDaPessoa).maybeSingle();
     if (!cad) return json({ error: `${d.nome}: cadastro não encontrado.` }, 404);
 
+    // Morador pelo Portal do Síndico: o BANCO decide, com a credencial de quem chamou.
+    let orgPeloSindico: string | null = null;
+    if (pelaPortaDoSindico !== undefined) {
+        const texto = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+        const empreendimentoId = texto(pelaPortaDoSindico?.empreendimentoId);
+        const tokenDoSindico = texto(pelaPortaDoSindico?.token) || null;
+        const clientIdDoSindico = texto(pelaPortaDoSindico?.clientId) || null;
+        if (!UUID.test(empreendimentoId)) return json({ error: 'Informe o condomínio.' }, 400);
+        if (!tokenDoSindico && !(clientIdDoSindico && UUID.test(clientIdDoSindico))) return json({ error: 'Informe o acesso do síndico.' }, 400);
+        const comoChamador = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+            global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+        });
+        const { data: auth, error: erroAuth } = await comoChamador.rpc('sindico_portal_morador_autorizar_convite', {
+            p_token: tokenDoSindico, p_client_id: tokenDoSindico ? null : clientIdDoSindico,
+            p_empreendimento: empreendimentoId, p_pessoa: cad.id,
+        });
+        if (erroAuth) { console.error('[portal-invite-user] morador_autorizar_convite', erroAuth.message); return json({ error: 'Não foi possível validar o acesso.' }, 403); }
+        if (!auth?.ok || typeof auth.org !== 'string') return json({ error: auth?.motivo || 'Sem permissão.' }, 403);
+        orgPeloSindico = auth.org;
+    }
+
     // Cadastro com organização: o chamador tem de ser membro DELA. Cadastro
     // global: qualquer membro de organização pode convidar, e a org do token é a
     // dele (mesma regra de `supplier_portal_generate_token` para fornecedor global).
-    const vinculo = await exigirMembro(req, orgDoCondominio ?? cad.organization_id ?? null);
+    const vinculo = orgPeloSindico
+        ? { ok: true as const, email: 'portal do síndico' }
+        : await exigirMembro(req, orgDoCondominio ?? cad.organization_id ?? null);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
-    const organizationId: string | null = orgDoCondominio ?? cad.organization_id ?? (vinculo as { organizationId?: string }).organizationId ?? null;
+    const organizationId: string | null = orgPeloSindico ?? orgDoCondominio ?? cad.organization_id ?? (vinculo as { organizationId?: string }).organizationId ?? null;
     if (!organizationId) {
         return json({ error: 'Não foi possível determinar a organização do convite.' }, 400);
     }

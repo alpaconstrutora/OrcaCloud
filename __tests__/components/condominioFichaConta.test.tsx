@@ -6,7 +6,8 @@
  * O que fica travado:
  *  1. o campo lista as contas de Minha Organização › Contas agrupadas por organização,
  *     e "Salvar ficha" manda a escolhida (e "Nenhuma" manda null);
- *  2. condomínio sem organização própria: campo desligado com o motivo, e a ficha não manda o campo.
+ *  2. condomínio sem organização própria: campo desligado com o motivo, e a ficha não manda o campo;
+ *  3. trocar uma conta de OUTRA org avisa que ela continua atendendo o condomínio (opção "a", 27/11).
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -71,6 +72,15 @@ describe('Ficha › Conta do condomínio', () => {
         fireEvent.click(screen.getByRole('button', { name: /Salvar ficha/ }));
         await waitFor(() => expect(empSvc.salvarFichaCondominio).toHaveBeenCalledTimes(2));
         expect(empSvc.salvarFichaCondominio.mock.calls[1][1]).toMatchObject({ condominio_payment_account_id: null });
+    });
+
+    it('3. limpar a conta de outra org avisa que ela continua atendendo o condomínio', async () => {
+        montar({ ...BASE, condominio_payment_account_id: 'sic' } as Empreendimento);
+        const campo = await screen.findByLabelText('Conta') as HTMLSelectElement;
+        await waitFor(() => expect(campo.value).toBe('sic'));
+        fireEvent.change(campo, { target: { value: '' } });
+        fireEvent.click(screen.getByRole('button', { name: /Salvar ficha/ }));
+        expect(await screen.findByText(/A conta Sicredi \(Alpa Construtora\) continua atendendo Condomínio Bella Vista/)).toBeTruthy();
     });
 
     it('2. sem organização própria: desligado com o motivo e a ficha não manda o campo', async () => {

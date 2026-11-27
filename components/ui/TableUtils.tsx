@@ -844,7 +844,12 @@ export function useResizableColumns(
 
     const measured: Record<string, number> = {};
     try {
-      const headRow = clone.querySelector('thead tr');
+      // ÚLTIMA linha do <thead>: é a que tem uma célula por coluna. Com cabeçalho em dois
+      // níveis (StandardTable `gruposDeColunas`, Conciliação › Conciliados) a primeira é a
+      // dos grupos, com colSpan — casar <col> e célula pelo índice nela media a coluna
+      // errada e o botão de ajuste "parava de funcionar" (26/11/2026).
+      const headRows = clone.querySelectorAll('thead tr');
+      const headRow = headRows[headRows.length - 1];
       const cells = headRow ? Array.from(headRow.children) : [];
       const cloneCols = Array.from(clone.querySelectorAll('col'));
       cloneCols.forEach((c, i) => {

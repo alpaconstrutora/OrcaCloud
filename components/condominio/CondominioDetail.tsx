@@ -34,7 +34,7 @@ import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import { useStore } from '../../store/useStore';
 import { financialRegistryService } from '../../services/financialRegistryService';
 import type { PaymentAccount } from '../../types/financial';
-import { gruposDeContas, MOTIVO_SEM_ORG_PROPRIA } from '../../utils/contaDoCondominio';
+import { avisoContaAnteriorContinua, gruposDeContas, MOTIVO_SEM_ORG_PROPRIA } from '../../utils/contaDoCondominio';
 
 export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'assembleias' | 'comunicacao';
 
@@ -94,9 +94,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
     const [salvando, setSalvando] = React.useState(false);
     const [clientes, setClientes] = React.useState<ClientOption[]>([]);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    const notify = (message: string, type: 'success' | 'error' = 'success', ms = 4500) => {
         setNotification({ message, type });
-        setTimeout(() => setNotification(null), 4500);
+        setTimeout(() => setNotification(null), ms);
     };
 
     // ── Centros de custo do condomínio ────────────────────────────────────
@@ -251,7 +251,13 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             const atualizado = { ...e, ...campos } as Empreendimento;
             setE(atualizado);
             onChanged?.(atualizado);
-            notify('Ficha do condomínio salva.');
+            // Trocou/limpou uma conta de OUTRA org: ela continua atendendo o condomínio (opção "a"
+            // do usuário, 27/11/2026) — avisar, com tempo para ler.
+            const aviso = 'condominio_payment_account_id' in campos
+                ? avisoContaAnteriorContinua(e.condominio_payment_account_id, ficha.condominio_payment_account_id, contas, minhasOrgs, e.condominio_org_id)
+                : null;
+            if (aviso) notify(`Ficha do condomínio salva. ${aviso}`, 'success', 12000);
+            else notify('Ficha do condomínio salva.');
         } catch (err: any) {
             notify(err?.message || 'Erro ao salvar a ficha.', 'error');
         } finally { setSalvando(false); }

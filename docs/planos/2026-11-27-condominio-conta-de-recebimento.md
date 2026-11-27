@@ -110,7 +110,16 @@ Resposta, literal, ao "Ficou de fora" do relatório do #791:
   lançamentos novos recebem a conta do condomínio.
 - **#788 mantido:** a faixa do Financeiro mostra a conta **Asaas** (a que emite boleto), que pode não ser a conta
   escolhida na Ficha.
-- **Vínculo "Atende também":** expliquei o comportamento (abaixo); a decisão está pendente.
+- **Vínculo "Atende também":** expliquei o comportamento e recomendei (a) com aviso; resposta, literal:
+  > a) de que marca voce esta se referindo?
+  > b) explique melhor
+
+  > voce recomenda qual?
+
+  > Faço a com esse aviso?
+
+  Lido como "sim": **(a)** — a Ficha não desmarca; ao trocar/limpar uma conta de OUTRA organização, avisa que ela
+  continua atendendo o condomínio e onde desmarcar.
 
 ## Status (27/11/2026)
 
@@ -118,17 +127,19 @@ Resposta, literal, ao "Ficou de fora" do relatório do #791:
 |---|---|---|
 | 1ª (#788) | Faixa "Boletos saem pela conta…" no Financeiro + Emitir desligado sem conta | no ar (`c418db6`); falta conferir na tela |
 | 2ª (#791) | Campo "Conta" na Ficha + gatilho "vale para tudo" | no ar (`8d713cb`); falta conferir na tela |
+| 3ª | Aviso ao trocar/limpar conta de outra organização (opção "a") | ver item abaixo |
 
 ## Pendências
 
 - [ ] **Conferir as duas telas publicadas** no Bella Vista (Financeiro e Ficha), desktop e celular. Bloqueio: o Chrome
   estava desconectado em 27/11. Pronto quando: print da faixa e do campo, sem rolagem lateral em 390px.
-- [ ] **Decisão do usuário — vínculo ao limpar/trocar a conta.** Salvar na Ficha uma conta de OUTRA organização marca
-  "Atende também: <condomínio>" na conta (Minha Organização › Contas). Trocar a Ficha para "Nenhuma" ou outra conta
-  NÃO desmarca: a conta antiga segue nas listas do condomínio, inclusive no Portal do Síndico. Opções: (a) manter
-  assim (desmarca à mão em Contas); (b) a Ficha desmarca sozinha quando a conta sai — só se o vínculo foi criado por
-  ela e nenhum lançamento do condomínio usa a conta. Pronto quando: o usuário escolher e, se (b), a prova em bloco
-  desfeito mostrar o vínculo sumindo só nesse caso.
+- [x] **Vínculo ao limpar/trocar a conta — opção (a) com aviso.** `avisoContaAnteriorContinua`
+  (`utils/contaDoCondominio.ts`): conta antiga de OUTRA org que sai da Ficha → "Ficha do condomínio salva. A conta X (Org)
+  continua atendendo <condomínio>, inclusive no Portal do Síndico. Para tirar, desmarque <condomínio> em "Atende
+  também" dessa conta, em Minha Organização › Contas." (12 s na tela). Não avisa se não mudou, se não havia conta, se a
+  antiga é do próprio condomínio ou sem org própria. `contaDoCondominio.test` (+1, 6 casos) e
+  `condominioFichaConta.test` (+1). Testes do condomínio 19 / 301 verdes; tsc 0; `check-ui-standard` 0.
+- [ ] PR + CI + publicação do aviso.
 - [ ] **Escolher a conta** do Bella Vista e do Galeria Altavista na Ficha (usuário). Hoje nenhum tem conta escolhida,
   então o gatilho ainda não age em nada.
 - [ ] **Boleto/PIX (G2c do Portal do Síndico)** depende de uma conta Asaas no CNPJ do condomínio — fica no plano

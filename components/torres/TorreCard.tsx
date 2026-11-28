@@ -114,7 +114,7 @@ export const TorreTotais: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const TorreTotalMetric: React.FC<{ label: string; value: string; color?: string }> = ({ label, value, color = 'text-gray-700' }) => (
     <div>
-        <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 block">{label}</span>
+        <span className="text-xs font-medium text-gray-500 block">{label}</span>
         <span className={`text-sm font-bold ${color}`}>{value}</span>
     </div>
 );

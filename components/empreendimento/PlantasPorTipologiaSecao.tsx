@@ -14,7 +14,7 @@ import ImageDropzone from '../ui/ImageDropzone';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import { empreendimentoTipologiaPlantasService } from '../../services/empreendimentoTipologiaPlantasService';
-import { tipologiasDoEmpreendimento, type PlantaDaTipologia, type TipologiaDoEmpreendimento } from '../../utils/espelhoPlantaDaTipologia';
+import { textoDaAreaPrivativa, tipologiasDoEmpreendimento, type PlantaDaTipologia, type TipologiaDoEmpreendimento } from '../../utils/espelhoPlantaDaTipologia';
 
 interface Props {
   empreendimentoId: string;
@@ -133,6 +133,10 @@ export const PlantasPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, or
                   {t.unidades > 0 ? plural(t.unidades) : 'nenhuma unidade usa'}
                 </p>
               </div>
+              {/* O que identifica a tipologia (27/11/2026): a área privativa das unidades dela. */}
+              {t.areaPrivativa && (
+                <p className="text-xs text-gray-600" data-testid={`area-${t.chave}`}>Área privativa {textoDaAreaPrivativa(t.areaPrivativa)}</p>
+              )}
               <span title={somenteLeitura}>
                 <ImageDropzone
                   value={t.planta?.imagem_url ?? null}

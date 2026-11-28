@@ -3,7 +3,7 @@
  * planta cadastrada, e a lista do cadastro. Puro. Plano: docs/planos/2026-11-09-espelho-de-vendas-3d.md.
  */
 import { describe, expect, it } from 'vitest';
-import { chaveDaTipologia, plantaDaUnidade, plantasPorChave, tipologiasDoEmpreendimento, type PlantaDaTipologia } from '../utils/espelhoPlantaDaTipologia';
+import { chaveDaTipologia, plantaDaUnidade, plantasPorChave, textoDaAreaPrivativa, tipologiasDoEmpreendimento, type PlantaDaTipologia } from '../utils/espelhoPlantaDaTipologia';
 
 const planta = (tipologia: string, url = `https://x/${tipologia}.png`): PlantaDaTipologia => ({ id: `p-${tipologia}`, tipologia, tipologia_chave: chaveDaTipologia(tipologia), imagem_url: url });
 
@@ -75,5 +75,24 @@ describe('tipologiasDoEmpreendimento', () => {
 
   it('sem tipologia em lugar nenhum: lista vazia', () => {
     expect(tipologiasDoEmpreendimento({ unidades: [null, ''], imoveis: [undefined], plantas: [] })).toEqual([]);
+  });
+
+  it('área privativa por tipologia, pela posição de cada unidade: igual = um número; varia = de/até (27/11/2026)', () => {
+    const r = tipologiasDoEmpreendimento({
+      unidades: ['Tipo 1', 'Tipo 1', 'Tipo 4', 'Tipo 4', 'Tipo 9'],
+      areasDasUnidades: [81, 81, 127, 130.5, null],
+      imoveis: ['Tipo 1', 'Só no estoque'], plantas: [],
+    });
+    const area = (rot: string) => textoDaAreaPrivativa(r.find((t) => t.rotulo === rot)?.areaPrivativa);
+    expect(area('Tipo 1')).toBe('81 m²');
+    expect(area('Tipo 4')).toBe('127–130,5 m²');
+    // Sem área na unidade (ou só no estoque): sem texto, nunca "0 m²".
+    expect(area('Tipo 9')).toBeNull();
+    expect(area('Só no estoque')).toBeNull();
+  });
+
+  it('sem as áreas (quem não manda): a lista sai igual, só sem área', () => {
+    const r = tipologiasDoEmpreendimento({ unidades: ['Tipo 1'], imoveis: [], plantas: [] });
+    expect(r[0].areaPrivativa).toBeNull();
   });
 });

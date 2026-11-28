@@ -345,6 +345,29 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   );
   const carregando = <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>;
 
+  // Total geral (todas as torres) — mora na aba Unidades desde 27/11/2026 ("a somatória de áreas ficou na aba de torres.
+  // deveria estar na aba unidades"), ACIMA da tabela (guia §6.14: nada abaixo de tabela).
+  const todasAsUnidades = Object.values(unitsByTower).flat();
+  const totalGeral = todasAsUnidades.length > 0 && (() => {
+    const totalPriv = todasAsUnidades.reduce((s, u) => s + (u.private_area ?? 0), 0);
+    const totalComum = todasAsUnidades.reduce((s, u) => s + (u.common_area ?? 0), 0);
+    const totalArea = totalPriv + totalComum;
+    return (
+      <div data-testid="total-geral">
+        <TorreTotais>
+          <div className="flex items-center gap-2 text-gray-700">
+            <BarChart2 className="w-4 h-4 text-gray-500" />
+            <span className="text-sm font-semibold">Total geral{towers.length > 1 ? ` (${towers.length} torres)` : ''}</span>
+          </div>
+          <TorreTotalMetric label="Unidades" value={String(todasAsUnidades.length)} />
+          <TorreTotalMetric label="Área privativa" value={totalPriv > 0 ? `${fmt(totalPriv)} m²` : '—'} color="text-blue-600" />
+          <TorreTotalMetric label="Área comum" value={totalComum > 0 ? `${fmt(totalComum)} m²` : '—'} color="text-violet-600" />
+          {totalArea > 0 && <TorreTotalMetric label="Área total" value={`${fmt(totalArea)} m²`} />}
+        </TorreTotais>
+      </div>
+    );
+  })();
+
   return (
     <div className="space-y-6">
       {/* Trilho só (bare): a aba Torres & Unidades já é um card. */}
@@ -359,6 +382,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       {/* Unidades — uma torre por vez: com 200 unidades por torre, as tabelas empilhadas viravam uma página sem fim. */}
       {aba === 'unidades' && (loading ? carregando : torreAtual && (
         <section className={blocoCls} aria-label="Unidades" data-testid="secao-unidades">
+          {totalGeral}
           {seletorDeTorre}
           <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 m-0 p-0">
             <UnitEditor key={torreAtual.id} tower={torreAtual} floors={floorsByTower[torreAtual.id]} onUnitsChange={handleUnitsChange} onTowerChange={handleTowerChange} />
@@ -523,27 +547,6 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
           </form>
         </fieldset>
       )}
-
-      {/* Totais gerais — só quando há pelo menos 1 torre com unidades */}
-      {Object.keys(unitsByTower).length > 0 && (() => {
-        const allUnits = Object.values(unitsByTower).flat();
-        if (allUnits.length === 0) return null;
-        const totalPriv = allUnits.reduce((s, u) => s + (u.private_area ?? 0), 0);
-        const totalComum = allUnits.reduce((s, u) => s + (u.common_area ?? 0), 0);
-        const totalArea = totalPriv + totalComum;
-        return (
-          <TorreTotais>
-            <div className="flex items-center gap-2 text-gray-500">
-              <BarChart2 className="w-4 h-4 text-gray-400" />
-              <span className="text-xs font-black uppercase tracking-widest">Total geral</span>
-            </div>
-            <TorreTotalMetric label="Unidades" value={String(allUnits.length)} />
-            <TorreTotalMetric label="Área privativa" value={totalPriv > 0 ? `${fmt(totalPriv)} m²` : '—'} color="text-blue-600" />
-            <TorreTotalMetric label="Área comum" value={totalComum > 0 ? `${fmt(totalComum)} m²` : '—'} color="text-violet-600" />
-            {totalArea > 0 && <TorreTotalMetric label="Área total" value={`${fmt(totalArea)} m²`} />}
-          </TorreTotais>
-        );
-      })()}
 
       </section>
       )}

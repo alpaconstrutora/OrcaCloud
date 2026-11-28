@@ -1,3 +1,4 @@
+import { sanitizeFileName } from '../utils/storageUtils';
 import { supabase } from '../lib/supabase';
 import {
   PartnerSupplierProfile,
@@ -852,7 +853,8 @@ export const partnerService = {
 
   // --- Anexos de Solicitações (Onda 5: fluxo reverso — parceiro envia arquivo) ---
   async uploadRequestAttachment(workspaceId: string, file: File): Promise<string> {
-    const path = `partner-uploads/${workspaceId}/${Date.now()}_${file.name}`;
+    // Nome saneado: o Storage recusa chave com acento (400 InvalidKey).
+    const path = `partner-uploads/${workspaceId}/${Date.now()}_${sanitizeFileName(file.name)}`;
     const { error } = await supabase.storage
       .from('opura-docs')
       .upload(path, file, { cacheControl: '3600', upsert: false });

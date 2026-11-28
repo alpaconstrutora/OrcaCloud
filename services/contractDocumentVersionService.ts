@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sanitizeFileName } from '../utils/storageUtils';
 import {
     ContractDocumentVersion, DocumentKind, DocumentOwnerType, DocumentSource, MinutaVersion,
 } from '../types';
@@ -33,11 +34,16 @@ const BUCKET = 'documents';
  * `caminhoNoBucket`; nos portais, a Edge Function `portal-documentos-download`).
  */
 
-/** Caminho no bucket. Mantém o prefixo do contrato — é dele que a policy do bucket tira a organização. */
+/**
+ * Caminho no bucket. Mantém o prefixo do contrato — é dele que a policy do bucket tira a organização.
+ * O nome do arquivo passa por `sanitizeFileName`: o Storage recusa chave com acento
+ * (400 InvalidKey — "CONTRATO LOCAÇÃO - Ivana r1.pdf", 27/11/2026). O nome exibido da
+ * versão continua o original, com acento (`name`).
+ */
 const storagePathFor = (ownerType: DocumentOwnerType, ownerId: string, fileName: string) =>
     ownerType === 'ADDENDUM'
-        ? `contract-addendums/${ownerId}/${Date.now()}-${fileName.replace(/\s+/g, '_')}`
-        : `contract-minutas/${ownerId}/${Date.now()}-${fileName.replace(/\s+/g, '_')}`;
+        ? `contract-addendums/${ownerId}/${Date.now()}-${sanitizeFileName(fileName)}`
+        : `contract-minutas/${ownerId}/${Date.now()}-${sanitizeFileName(fileName)}`;
 
 const rows = (data: unknown): ContractDocumentVersion[] =>
     (data ?? []) as unknown as ContractDocumentVersion[];

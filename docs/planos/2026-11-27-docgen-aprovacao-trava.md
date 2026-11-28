@@ -1,0 +1,159 @@
+# Ofícios: só a aprovação marca o ofício como aprovado
+
+## Pedido original
+
+Na sessão, o assistente relatou um achado de outro revisor — *"um membro da organização
+consegue marcar um rascunho como aprovado direto, sem passar pela aprovação que o modelo
+exige"* — e perguntou: *"Quer que eu corrija isso numa frente separada?"*. O usuário respondeu:
+
+> sim
+
+Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026, à noite
+
+Revisão r3 (28/11/2026, decisão do usuário, relatada pela coordenação): fechar também a porta do
+MODELO agora — `doc_gen_emitir` lia a exigência do modelo ATUAL (qualquer membro edita modelos, ou
+troca o `modelo_id` do rascunho, até para modelo de outra organização). O ofício guarda a exigência
+do modelo na criação; o modelo do ofício só muda no rascunho antes do envio, para um da mesma
+organização. Depois, publicar.
+
+Revisão r2 (28/11/2026, mesma revisão): o reenvio (`fn_alcada_enviar(p_reenvio => true)`) mantém
+a cadeia e só exige REJEITADO — que o cliente gravava direto. Mesma porta do achado 1.
+
+Revisão r1 (28/11/2026, revisor da coordenação, mesma sessão): (1) aprovação velha valendo para
+texto novo — o cliente punha PENDENTE direto com a cadeia antiga e o "nível 2" sem aprovador
+cadastrado era aprovado por qualquer membro; (2) INSERT direto de ofício já emitido; (3) comentar
+que o corpo copiado chama `fn_alcada_org_condominio` (só a 915100 cria); (4) horário do pedido.
+
+## O que foi encontrado (27/11/2026, antes de corrigir)
+
+- **Reproduzido em produção** (BEGIN … ROLLBACK, membro comum `member` da org 926cf626, modelo
+  com `exige_aprovacao = true`): emitir sem aprovação → recusado; `PATCH approval_status =
+  'APROVADO'` → `ok:1`; emitir → `ok:OF-0001/2026`; o histórico registrou "APROVADO por <quem
+  fez o PATCH>". `INSERT` de rascunho já `APROVADO` → emitir → `ok:OF-0002/2026`.
+  Em 27/11 há 0 ofícios em produção — nenhum dado a revisar.
+- **Por que passava**: a RLS de `doc_gen_documentos` só confere a organização;
+  `fn_doc_gen_congelar` deixa `approval_status` livre no rascunho (é o campo que a aprovação
+  muda); `trg_zz_alcada_trava_passo` só dispara em `UPDATE OF approval_chain`.
+- **Causa raiz**: a trava que fecha isso já existe — `fn_alcada_guarda`, na
+  `aplicar_20271118915100_alcada_trava_servidor.sql` (F14, PR #576), que cobre
+  `doc_gen_documentos` e mais 7 tabelas — mas **nunca foi aplicada** (em 27/11
+  `trg_alcada_guarda` não existe em nenhuma tabela). E ela **não aplica como está**: os
+  `ALTER FUNCTION … SET orcacloud.alcada_servidor = 'on'` dão `42501: permission denied to set
+  parameter` com o papel `postgres` do `db query` (não é superusuário no Supabase; a prova de
+  18/11 rodou num PGlite, como superusuário).
+- **Quem grava a aprovação do ofício hoje** (o mapa que a trava não pode quebrar):
+
+  | transição | quem | como |
+  |---|---|---|
+  | RASCUNHO/REJEITADO → PENDENTE | quem edita o ofício | `fn_alcada_enviar` (INVOKER, liga `orcacloud.alcada_servidor`) via `approvalService.submit` |
+  | PENDENTE → PENDENTE (nível 1 de 2) / APROVADO | aprovador da alçada (`fn_alcada_pode_aprovar`: `approval_approvers` com `entity_type = 'doc_gen_documento'`; sem ninguém cadastrado no nível, qualquer membro) | `fn_alcada_aprovar` + `fn_alcada_trava_passo` |
+  | qualquer estado → REJEITADO (a RPC não confere o estado atual) | quem pode aprovar o nível da vez (`fn_alcada_proximo_nivel` da cadeia); nível sem aprovador cadastrado = qualquer membro — ex.: ofício APROVADO de 1 nível, nível da vez 2, ninguém cadastrado no 2 → qualquer membro rejeita. Só tira a aprovação: o reenvio recomeça no nível 1 | `fn_alcada_rejeitar` |
+  | PENDENTE → RASCUNHO | quem edita | `UPDATE` direto (`docGenDocumentoService.retirarDaAprovacao`) |
+  | APROVADO → RASCUNHO | o banco, quando o texto muda | `fn_doc_gen_congelar` |
+  | (lê) APROVADO para emitir | quem emite | `doc_gen_emitir` (DEFINER) |
+
+## Decisões
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 27/11 | Trava nova só para ofício, ou a da 915100? | A da 915100, **sem mudar o corpo** (uma regra só, já revisada), ligada só em `doc_gen_documentos`. A função só é criada se não existir — a 915100, quando aplicada, prevalece e estende às 8 tabelas. |
+| 27/11 | Corrigir as outras 7 tabelas aqui? | Não (escopo do pedido). Listadas abaixo, com prova; a 915100 precisa de conserto antes de aplicar. |
+
+| 28/11 (r1) | Como impedir que a aprovação de um texto valha para outro? | Pela API o ofício nunca entra em PENDENTE direto (gatilho próprio, sem mexer no corpo de `fn_alcada_guarda`). ⚠️ A premissa "só `fn_alcada_enviar`, que zera a cadeia" era falsa — ver r2. |
+| 28/11 (r3, usuário) | A exigência do modelo pode mudar depois de criado o ofício? | Não: o ofício guarda `exige_aprovacao`/`exige_assinatura` do modelo na criação; mudar o modelo vale só para ofícios novos. Trocar o modelo do ofício: só no rascunho antes do envio, para modelo da mesma organização, relendo a exigência. |
+| 28/11 (r2) | O reenvio (`p_reenvio`) mantém a cadeia e só pede REJEITADO, que o cliente gravava direto | Pela API a única mudança de `approval_status` aceita é PARA `RASCUNHO`; INSERT só `RASCUNHO`. PENDENTE/APROVADO/REJEITADO só pelas RPCs; reenvio só depois de rejeição de verdade (`fn_alcada_rejeitar`), e a rodada recomeça no nível 1. |
+| 28/11 (r1) | INSERT de ofício não rascunho | Recusado para qualquer escritor sem `docgen.emitindo`; em main nenhum caminho legítimo insere ofício emitido (conferido em pg_proc e supabase/); a frente do edital acrescenta `_assembleia_edital_criar` (DEFINER), que insere edital RASCUNHO sem número — passa. Compatível com `trg_doc_gen_edital_assembleia` (feat/edital-assembleia). |
+
+## Plano
+
+1. `supabase/migrations/aplicar_20271128410000_docgen_aprovacao_trava.sql`. **Muda**: cria
+   `fn_alcada_guarda` (corpo idêntico ao da 915100, só se não existir), REVOKE de PUBLIC/anon,
+   `trg_alcada_guarda` BEFORE INSERT OR UPDATE em `doc_gen_documentos`. **Pronto quando**:
+   `segurancaMigrations`/`migrationsPrefixo` verdes; o ensaio da prova (item 2) dá `TUDO OK`
+   com a migration (1× e 2×) e falha sem ela; **aplicada pelo usuário** e a prova direta dá
+   `TUDO OK`.
+2. `scripts/teste-docgen-aprovacao-trava.sql`. **Muda**: prova BEGIN … ROLLBACK com os ataques
+   (PATCH para APROVADO e emitir; PENDENTE→APROVADO; REJEITADO→APROVADO; cadeia forjada; INSERT
+   aprovado ou com passo; níveis rebaixados) e os caminhos legítimos (enviar, não-aprovador
+   recusado, emitir em aprovação recusado, aprovar 2 níveis, texto editado volta a RASCUNHO,
+   reenviar e emitir, retirar da aprovação, rejeitar e reenviar, modelo sem exigência emite
+   direto, prazo do emitido). **Pronto quando**: sem a migration falha em "a marca o rascunho
+   APROVADO direto (PATCH)" (veio `ok:1`); com ela, `TUDO OK`.
+3. (r1) A mesma migration ganha `fn_doc_gen_trava_entrada` + `trg_doc_gen_trava_entrada`
+   (BEFORE INSERT OR UPDATE): pela API, nada entra em PENDENTE direto; INSERT nasce RASCUNHO sem
+   `numero`/`emitido_*` salvo com `docgen.emitindo`. Comentário sobre `fn_alcada_org_condominio`.
+   **Pronto quando**: as seções 7 e 8 da prova falham com a versão r0 da migration (veio `ok:1`
+   em "r1: a troca o texto do aprovado e põe PENDENTE no mesmo PATCH" e em "r1: a insere ofício
+   já EMITIDO com número") e dão `TUDO OK` com a r1, aplicada 1× e 2×.
+4. (r2) `fn_doc_gen_trava_entrada`: pela API, `approval_status` só muda PARA `RASCUNHO`; INSERT só
+   `RASCUNHO`. **Pronto quando**: a seção 10 da prova (REJEITADO forjado sobre aprovado, sobre
+   rascunho com cadeia antiga e sobre PENDENTE com nível 1 dado; INSERT REJEITADO; rejeição de
+   verdade → reenvio pede o nível 1 → aprovar → emitir; retirar) falha com a r1 e dá `TUDO OK`
+   com a r2, 1× e 2×.
+5. (r3) Mesma migration: colunas `doc_gen_documentos.exige_aprovacao`/`exige_assinatura` (NOT
+   NULL, backfill do modelo), preenchidas no INSERT por `fn_doc_gen_trava_entrada` (cliente não
+   grava); `modelo_id` muda pela API só no rascunho antes do envio e para modelo da mesma
+   organização (também no INSERT), relendo a exigência; `doc_gen_emitir`/`doc_gen_assinar`
+   reescritas da definição viva, lendo a exigência do ofício. **Pronto quando**: a seção 9 da
+   prova (desligar no modelo e emitir/assinar; front cria sem as colunas; cliente grava a coluna;
+   modelo de outra organização na troca e no INSERT; troca em aprovação e no aprovado; troca
+   legítima no rascunho relê a exigência; backfill de um rascunho e de um emitido que já
+   existiam) falha com a r2 e dá `TUDO OK` com a r3, 1× e 2×.
+
+> Numeração da prova renumerada na r3 (as referências abaixo às seções 7, 8 e 10 são da numeração
+> antiga): 7 → 6 (r1, aprovação velha), 8 → 7 (r1, nasce rascunho), 10 → 8 (r2, rejeição
+> forjada), nova 9 (r3, modelo), 9 → 10 (travas no lugar).
+
+## Estado
+
+27–28/11/2026, branch `feat/docgen-aprovacao-trava`:
+
+- [x] 1 migration — escrita; ensaio `TUDO OK` (1× e 2×); **não aplicada** (com o usuário).
+- [x] 2 prova — RED sem a migration (`FALHOU: a marca o rascunho APROVADO direto (PATCH) (veio
+  ok:1 …)`), `TUDO OK` com ela.
+- [x] 3 r1 — RED com a r0 nas seções 7 e 8; `TUDO OK` com a r1 (1× e 2×). Prova do edital
+  (feat/edital-assembleia) com as duas migrations: só o caso "INSERT direto de edital já aprovado
+  recusado" muda — continua recusado (42501), mas com a mensagem de `trg_alcada_guarda`, que
+  dispara antes da do edital; com esse caso aceitando qualquer 42501, `TUDO OK`. Ajuste é na
+  prova do edital (ou na ordem do gatilho dela), não aqui.
+- [x] 4 r2 — ataque provado com a r1 (aprovar X → editar Y → PATCH REJEITADO → reenvio → nível 2
+  por qualquer membro → OF-0001/2026 emitido com Y). Seção 10 da prova: com a r1 falha em "r2: a
+  passa o APROVADO para REJEITADO direto" (veio `ok:1`); com a r2, `TUDO OK` (1× e 2×).
+- [x] 5 r3 — com a r2: desligar no modelo → emitir → `ok:OF-0006/2026`; trocar para modelo de
+  outra organização → `ok:1` → emitir `ok:OF-0001/2026`. Seção 9: com a r2 falha em "r3: o membro
+  desliga a exigência no modelo e emite"; com a r3, `TUDO OK` (1× e 2×; o backfill rodou nos 2
+  ofícios criados antes da migration). Prova do edital com esta e depois a do edital: `TUDO OK`
+  (com o caso do edital já aprovado aceitando qualquer 42501, como na r1).
+- [ ] aplicar a migration e rodar a prova direto (usuário).
+
+### Fora deste PR (mesmo padrão, sem correção aqui)
+
+- **Quem edita modelos** (r3): a RLS de `doc_gen_modelos` só confere a organização. Um membro ainda
+  pode criar/editar um modelo sem exigência e escolhê-lo no rascunho antes de enviar (ou antes de
+  criar o ofício). A trava fecha mudar a exigência DEPOIS; fechar a escolha é permissão de editar
+  modelos — decisão de produto.
+- Tela (r3): `NovoOficioTela` mostra "Este modelo exige aprovação" pelo modelo atual, não pelo
+  ofício. Se o modelo for desligado depois, a tela não avisa, e a emissão é recusada pelo banco
+  com a mensagem certa. Ler `exige_*` do ofício na tela fica para depois da migration aplicada
+  (selecionar coluna que ainda não existe quebraria a tela). E, se um dia `COLUNAS` incluir
+  `exige_*`, `rascunhoDoDocumento` tem de tirá-las do payload — senão o INSERT é recusado.
+
+Sonda de 27/11 (BEGIN … ROLLBACK, membro comum da org dona, `UPDATE … SET approval_status =
+'APROVADO'` num item não aprovado): **`ok:1` e ficou APROVADO** em `internal_transactions`
+(item PENDENTE), `contracts`, `purchase_orders`, `process_instance_steps` e
+`blueprint_snapshots`. `purchase_requests` e `project_risks` não tinham item de teste, mas têm a
+mesma estrutura (só `trg_zz_alcada_trava_passo`, em `UPDATE OF approval_chain`;
+`fn_purchase_requests_guard` não protege `approval_status`). É o F14, que a 915100 fecha — mas
+ela falha ao aplicar (os `ALTER FUNCTION … SET`, acima). Conserto possível, a decidir: trocar os
+`ALTER FUNCTION … SET` por `set_config(…, true)` dentro das seis funções, ou
+`GRANT SET ON PARAMETER orcacloud.alcada_servidor` por quem tiver o privilégio.
+
+## Verificação
+
+- Ensaio: `bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-docgen-aprovacao-trava.sql
+  supabase/migrations/aplicar_20271128410000_docgen_aprovacao_trava.sql` e
+  `npx supabase db query --linked -f /tmp/e.sql` → `TUDO OK`.
+- Depois de aplicada: `npx supabase db query --linked -f scripts/teste-docgen-aprovacao-trava.sql`
+  → `TUDO OK`.
+- Tela: Documentos › Ofícios — enviar para aprovação, aprovar em Financeiro › Aprovações,
+  emitir; retirar da aprovação; editar um aprovado (volta a rascunho).

@@ -226,6 +226,9 @@ export const getDefaultPermissions = (role: OrganizationRole): UserPermissions =
         // Diretoria / ÒPURA CEO (17/11/2026): desligada para todos os cargos, admin inclusive;
         // só liga quem marcar aqui (utils/permissaoDiretoria.ts, conferida também no banco).
         canViewDiretoria: false, canEditDiretoria: false,
+        // WhatsApp da empresa / OpenWA (23/11/2026): mesmo modelo da Diretoria — desligada para
+        // todos, só liga quem marcar (utils/permissaoWhatsappEmpresa.ts, conferida no banco: `wa_pode_usar`).
+        canUseWhatsappEmpresa: false,
         canEditLabor: false,
         // Gestão de treinamentos fora do RH (16/10/2026). Mesmo padrão do RH:
         // ver sim, editar não. Membro já gravado SEM a chave herda do RH (ver
@@ -288,6 +291,9 @@ export const getDefaultPermissions = (role: OrganizationRole): UserPermissions =
                 // plano). Sem isto o reduce acima ligava ver+editar, e salvar qualquer dado de um
                 // admin gravava a permissão — que o banco aceita (`_diretoria_orgs`).
                 canViewDiretoria: false, canEditDiretoria: false,
+                // WhatsApp da empresa (23/11/2026): idem — o reduce ligava a flag, e o banco
+                // (`wa_pode_usar`) aceitaria o envio pelo número do ÒPURA de qualquer admin.
+                canUseWhatsappEmpresa: false,
             };
         case 'member':
             // `member` = operacional: edita o que produz obra/compra/venda,
@@ -403,6 +409,9 @@ export const DETAILED_PERMISSIONS: { group: string; title: string; view: string;
     // Grupo PRÓPRIO: no grupo "Geral", marcar o grupo inteiro (para dar Tarefas a alguém) ligava junto o
     // painel da diretoria (revisão de 17/11).
     { group: 'Diretoria', title: 'Diretoria (CEO)', view: 'canViewDiretoria', edit: 'canEditDiretoria' },
+    // WhatsApp da empresa / OpenWA (23/11/2026): o banco confere a flag (`wa_pode_usar`). Vem desligada.
+    // Grupo PRÓPRIO pelo mesmo motivo da Diretoria: marcar o grupo inteiro não pode ligá-la de carona.
+    { group: 'WhatsApp', title: 'Usar o WhatsApp da empresa', view: 'canUseWhatsappEmpresa' },
 
     // --- Inteligência de Negócios ---
     { group: 'Inteligência de Negócios', title: 'BI Executivo', view: 'canViewBi' },
@@ -1116,7 +1125,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         if (newRole === 'owner') {
             const ok = await confirm({
                 title: `Tornar ${alvo.name} proprietário?`,
-                message: 'Esta pessoa passa a ter todas as permissões da organização, menos a Diretoria (CEO), que só liga quem a marcar em Permissões detalhadas. O cargo e as permissões atuais são substituídos.',
+                message: 'Esta pessoa passa a ter todas as permissões da organização, menos a Diretoria (CEO) e o WhatsApp da empresa, que só ligam para quem os marcar em Permissões detalhadas. O cargo e as permissões atuais são substituídos.',
                 variant: 'warning',
                 confirmLabel: 'Tornar proprietário',
             });

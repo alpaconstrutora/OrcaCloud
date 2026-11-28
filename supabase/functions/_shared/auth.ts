@@ -219,7 +219,22 @@ export function respostaDeErro(falha: FalhaAuth, corsHeaders: Record<string, str
  * publicado, `verify_jwt` desligado): a falha de configuração vira permissão.
  */
 export function chamadaDeCron(req: Request): boolean {
-    const esperado = Deno.env.get('CRON_SECRET') ?? '';
+    return chamadaComSegredo(req, 'CRON_SECRET');
+}
+
+/** O segredo `nomeDaVariavel` está configurado com o mínimo de 32 caracteres? */
+export function segredoConfigurado(nomeDaVariavel: string): boolean {
+    return (Deno.env.get(nomeDaVariavel) ?? '').length >= 32;
+}
+
+/**
+ * `Authorization: Bearer <segredo>` confere com o secret `nomeDaVariavel`?
+ * Mesma regra de `chamadaDeCron` (que é esta com `CRON_SECRET`), para chamador
+ * que não é o cron e tem segredo próprio — ex.: o worker do WhatsApp
+ * (`WA_WORKER_SECRET`). Segredo com menos de 32 caracteres (ou ausente) → false.
+ */
+export function chamadaComSegredo(req: Request, nomeDaVariavel: string): boolean {
+    const esperado = Deno.env.get(nomeDaVariavel) ?? '';
     if (esperado.length < 32) return false;
 
     const enviado = req.headers.get('Authorization') ?? '';

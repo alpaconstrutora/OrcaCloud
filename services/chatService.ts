@@ -11,6 +11,14 @@ import { orderService } from './orderService';
  */
 export type OrderChatRole = 'buyer' | 'supplier' | 'system';
 
+/**
+ * Por onde a mensagem passou: 'whatsapp' = veio do fornecedor pelo WhatsApp do
+ * ÒPURA, ou o comprador a mandou também pelo WhatsApp (piloto OpenWA, 23/11/2026).
+ * Só a service_role grava 'whatsapp' (gatilho trg_order_chats_canal): pela tela
+ * a linha sempre nasce 'app'.
+ */
+export type OrderChatCanal = 'app' | 'whatsapp';
+
 export interface OrderChatMessage {
     id: string;
     orderId: string;
@@ -20,6 +28,7 @@ export interface OrderChatMessage {
     message: string;
     isSystem: boolean;
     createdAt: string;
+    canal: OrderChatCanal;
 }
 
 /** Linha de `order_chats` como ela volta do banco (ou da RPC de token). */
@@ -34,10 +43,12 @@ export function mapChatRow(m: any): OrderChatMessage {
         message: m.message,
         isSystem: m.is_system,
         createdAt: m.created_at,
+        // A RPC do link público não traz a coluna: sem ela, 'app'.
+        canal: m.canal === 'whatsapp' ? 'whatsapp' : 'app',
     };
 }
 
-const CHAT_COLUMNS = 'id, order_id, sender_email, sender_name, sender_role, message, is_system, created_at';
+const CHAT_COLUMNS = 'id, order_id, sender_email, sender_name, sender_role, message, is_system, created_at, canal';
 
 export const chatService = {
     async listMessages(orderId: string): Promise<OrderChatMessage[]> {

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
 import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Hash, Mail, RotateCcw, ChevronRight, ChevronDown, Menu, Layers, Percent, Landmark , HelpCircle, Tags, Timer } from 'lucide-react';
 import WhatsappCloudSettings from './settings/WhatsappCloudSettings';
+import WhatsappOpenwaSettings from './settings/WhatsappOpenwaSettings';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import NomenclaturaTable from './settings/NomenclaturaTable';
 import { useConfirm } from './ui/confirm';
@@ -395,6 +396,8 @@ const Settings: React.FC = () => {
 
             {activeLeaf === 'whatsapp' && (
                 <div className="space-y-6">
+            {/* Número do ÒPURA (OpenWA), um só para a plataforma: situação + uso por organização (piloto 23/11/2026). */}
+            <WhatsappOpenwaSettings />
             {/* Token da Cloud API: por organização, no servidor (achado F75, 18/11/2026). */}
             <WhatsappCloudSettings />
             {/* Templates WhatsApp */}

@@ -1,7 +1,11 @@
 import React from 'react';
-import { Send, User, Bot, AlertCircle } from 'lucide-react';
+import { Send, User, Bot, AlertCircle, MessageCircle } from 'lucide-react';
 import { chatService, OrderChatMessage, OrderChatRole } from '../services/chatService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
+import { whatsappOpenwaService, ErroWhatsappOpenwa } from '../services/whatsappOpenwaService';
+import {
+    ultimaDoFornecedorPeloWhatsapp, comandoParaTentativa, comandoAposErro, type ComandoGuardado,
+} from '../utils/canalWhatsappDoPedido';
 
 interface OrderChatProps {
     orderId: string;
@@ -15,6 +19,12 @@ interface OrderChatProps {
     /** Presente = acesso por link público: lê e escreve por RPC de token. */
     portalToken?: string;
     accent?: 'indigo' | 'portal';
+    /**
+     * O pedido vai pelo WhatsApp do ÒPURA (canal `openwa` de
+     * `escolherCanalDoPedido`: org usa, usuário tem a permissão, fornecedor tem
+     * telefone). Só então aparece a caixa "Enviar também pelo WhatsApp".
+     */
+    whatsappDoOpenwa?: boolean;
 }
 
 // §24 — cada variante escrita por extenso; o JIT do Tailwind não enxerga classe
@@ -36,7 +46,7 @@ const ACCENTS = {
     },
 } as const;
 
-const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, portalToken, accent = 'indigo' }) => {
+const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, portalToken, accent = 'indigo', whatsappDoOpenwa = false }) => {
     const A = ACCENTS[accent];
     const meuPapel: OrderChatRole = perfil === 'fornecedor' ? 'supplier' : 'buyer';
 
@@ -45,7 +55,15 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [enviando, setEnviando] = React.useState(false);
+    // "Enviar também pelo WhatsApp": `null` = segue o padrão (marcada quando a
+    // última mensagem do fornecedor veio pelo WhatsApp); clicou, vale a escolha.
+    const [pelaEscolha, setPelaEscolha] = React.useState<boolean | null>(null);
+    const mostrarCaixaWhatsapp = whatsappDoOpenwa && !portalToken && meuPapel === 'buyer';
+    const enviarPeloWhatsapp = mostrarCaixaWhatsapp && (pelaEscolha ?? ultimaDoFornecedorPeloWhatsapp(messages));
     const scrollRef = React.useRef<HTMLDivElement>(null);
+    // comando_id da resposta pelo WhatsApp, guardado até dar certo: mandar de novo o MESMO
+    // texto depois de um erro reaproveita a chave (o servidor não duplica a mensagem).
+    const comandoWhatsapp = React.useRef<ComandoGuardado | null>(null);
 
     React.useEffect(() => {
         let cancelado = false;
@@ -100,6 +118,30 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
         setEnviando(true);
 
         try {
+            if (enviarPeloWhatsapp) {
+                // A Edge Function grava a linha no chat (canal 'whatsapp') e põe a
+                // mensagem na fila do número do ÒPURA.
+                const comando = comandoParaTentativa(
+                    comandoWhatsapp.current, `${orderId}\n${messageText}`, () => crypto.randomUUID(),
+                );
+                comandoWhatsapp.current = comando;
+                await whatsappOpenwaService.responderNoPedido(orderId, messageText, { comandoId: comando.comandoId });
+                comandoWhatsapp.current = null;
+                // Daqui em diante a mensagem SAIU: o campo fica vazio e nada pode
+                // devolver o texto nem acusar erro de envio — o comando guardado foi
+                // solto, e um "reenviar" agora seria um envio novo, um 2º WhatsApp ao
+                // fornecedor (revisão da Tarefa 7). Reler a conversa é só para
+                // mostrar a linha já com o selo; falhou, o realtime a traz.
+                void (async () => {
+                    try {
+                        const lista = await chatService.listMessages(orderId);
+                        setMessages(lista);
+                    } catch (falhaAoReler) {
+                        console.warn('[OrderChat] Mensagem enviada; não consegui reler a conversa:', falhaAoReler);
+                    }
+                })();
+                return;
+            }
             const sentMsg = portalToken
                 ? await supplierPortalTokenService.sendOrderMessage(portalToken, orderId, messageText)
                 : await chatService.sendMessage(
@@ -112,6 +154,13 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
             setMessages(prev => (prev.some(m => m.id === sentMsg.id) ? prev : [...prev, sentMsg]));
         } catch (error) {
             console.error('Error sending message:', error);
+            // Erro antes da confirmação: o mesmo texto, de novo, reaproveita o comando_id
+            // (salvo se o servidor cancelou aquele comando — aí vai um novo).
+            if (enviarPeloWhatsapp) {
+                comandoWhatsapp.current = comandoAposErro(
+                    comandoWhatsapp.current, error instanceof ErroWhatsappOpenwa ? error.codigo : null,
+                );
+            }
             setErro(error instanceof Error ? error.message : 'Erro ao enviar mensagem.');
             // Devolve o texto para o campo — reescrever do zero é o pior desfecho
             // possível de uma falha de rede.
@@ -185,6 +234,13 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
                                         <span className="text-xs text-gray-400">
                                             {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                         </span>
+                                        {/* Selo (§8: texto colorido, sem pílula): a mensagem passou pelo WhatsApp do ÒPURA. */}
+                                        {msg.canal === 'whatsapp' && (
+                                            <span className="flex items-center gap-1 text-xs font-normal text-emerald-700" title="Mensagem que passou pelo WhatsApp do ÒPURA">
+                                                <MessageCircle className="w-3 h-3" />
+                                                WhatsApp
+                                            </span>
+                                        )}
                                     </div>
                                     <div className={`p-3.5 rounded-[10px] text-sm font-normal leading-relaxed ${isMe
                                         ? `${A.mine} rounded-tr-none`
@@ -219,11 +275,26 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
                         type="submit"
                         disabled={!newMessage.trim() || enviando}
                         className={`h-9 w-9 flex items-center justify-center text-white rounded-[6px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ${A.send}`}
-                        title="Enviar mensagem"
+                        title={enviando
+                            ? 'Enviando a mensagem anterior…'
+                            : !newMessage.trim()
+                                ? 'Escreva a mensagem para enviar'
+                                : enviarPeloWhatsapp ? 'Enviar mensagem (também pelo WhatsApp)' : 'Enviar mensagem'}
                     >
                         <Send className="w-4 h-4" />
                     </button>
                 </div>
+                {mostrarCaixaWhatsapp && (
+                    <label className="mt-2 inline-flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={enviarPeloWhatsapp}
+                            onChange={e => setPelaEscolha(e.target.checked)}
+                            className="w-4 h-4 rounded-[4px] border-gray-300 accent-emerald-600"
+                        />
+                        Enviar também pelo WhatsApp
+                    </label>
+                )}
             </form>
         </div>
     );

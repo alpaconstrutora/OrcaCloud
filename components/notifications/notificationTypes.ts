@@ -79,6 +79,8 @@ export const NOTIF_TYPE_META: Record<string, NotifTypeMeta> = {
     // Solicitante avisado da decisão (services/purchaseRequestService.ts). Não é
     // `solicitacao_aprovacao`, que já é a aprovação de DOCUMENTO do GED.
     solicitacao_compra_decidida: { category: 'suprimentos', label: 'Solicitação de compra aprovada/reprovada' },
+    // Fornecedor respondeu pelo WhatsApp do ÒPURA (Edge Function whatsapp-openwa-webhook).
+    whatsapp_resposta_pedido: { category: 'suprimentos', label: 'Resposta do fornecedor pelo WhatsApp' },
 
     // ── Documentos (GED / ÒPURA Docs) ───────────────────────────────────────
     documento_compartilhado: { category: 'documentos', label: 'Documento compartilhado' },
@@ -110,6 +112,8 @@ export const NOTIF_TYPE_META: Record<string, NotifTypeMeta> = {
     // ── Sistema — severidade crua vinda dos alertas da Academia ─────────────
     error:   { category: 'sistema', label: 'Erro' },
     warning: { category: 'sistema', label: 'Aviso' },
+    // O número do ÒPURA caiu (whatsapp-openwa-webhook → superadmins): ler o QR na máquina.
+    whatsapp_desconectado: { category: 'sistema', label: 'WhatsApp do ÒPURA desconectado' },
 };
 
 /** Ordem das categorias no dropdown de filtro. */

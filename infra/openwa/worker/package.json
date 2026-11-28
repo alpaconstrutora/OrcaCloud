@@ -1,0 +1,17 @@
+{
+  "name": "openwa-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Worker do OpenWA: busca a fila no Supabase, envia pelo OpenWA local e reporta (ver ../LEIA-ME.md).",
+  "type": "module",
+  "main": "worker.mjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node worker.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.90.1"
+  }
+}

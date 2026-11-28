@@ -239,3 +239,7 @@ ACL (REGRA #7):
   - Testes: `pedidoRecebimentoEdgeRegras` (26), `recebimentoFonte` (11), `components/RecebimentoFluxo` (5), gate com a
     aba Receber; `tsc` 0.
   - Fase 6 (computador na mesma regra) ainda não: o computador segue pelo caminho antigo até lá.
+- 2026-11-27: #797 (Fases 0–2) **no ar** (`d347774`, produção conferida, CI da `main` 18/18; 1ª rodada do PR caiu em
+  `TelaDeAssinatura` › "PDF que não desenha", sem relação e 3/3 local — reexecutado verde). Edge `pedido-recebimento`
+  **publicada pelo usuário** (pasta da frente). Sondas no bundle publicado: sem Authorization → 401; só anon → 401
+  "Token inválido"; token de link inválido → 403 "link inválido ou vencido"; corpo inválido → 400.

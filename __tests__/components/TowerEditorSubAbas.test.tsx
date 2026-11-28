@@ -106,6 +106,27 @@ describe('Torres & Unidades › sub-abas', () => {
     expect(within(secao).queryByText('201')).not.toBeInTheDocument();
   });
 
+  it('Total geral (todas as torres) mora na aba Unidades, acima da tabela — não em Torres (27/11/2026)', async () => {
+    montar();
+    await waitFor(() => expect(aba(/Unidades/)).toHaveTextContent('4'));
+    fireEvent.click(aba(/Torres/));
+    await screen.findByTestId('secao-torres');
+    expect(screen.queryByTestId('total-geral')).not.toBeInTheDocument();
+    fireEvent.click(aba(/Unidades/));
+    const total = await screen.findByTestId('total-geral');
+    expect(total).toHaveTextContent('Total geral (2 torres)');
+    expect(total).toHaveTextContent('Unidades4');
+    // Acima da tabela de unidades (guia §6.14): vem antes no documento.
+    // O total vem do pai (já carregado); a tabela, do UnitEditor, que ainda carrega — esperar por ela (na CI, mais
+    // lenta, o querySelector chegou antes da tabela e deu null).
+    const tabela = await waitFor(() => {
+      const t = screen.getByTestId('secao-unidades').querySelector('table');
+      expect(t).not.toBeNull();
+      return t!;
+    });
+    expect(total.compareDocumentPosition(tabela) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('Vista da janela segue a torre escolhida', async () => {
     montar();
     await waitFor(() => expect(aba(/Vista da janela/)).toBeInTheDocument());

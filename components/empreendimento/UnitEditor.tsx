@@ -72,6 +72,9 @@ const emptyBulkForm = () => ({
   rental_price: '', rental_status: '' as RentalUnitStatus | '',
 });
 
+/** Campo da edição em lote: h-9 como todo campo do app. */
+const loteCls = 'h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 bg-white';
+
 const fmtArea = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
 const emptyGenForm = (tower: EmpreendimentoTower) => ({
@@ -999,46 +1002,48 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
               <X className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-[10px] text-gray-400 font-medium -mt-1">Campos em branco não serão alterados.</p>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Pav. nº" value={bulkForm.floor} onChange={e => setBulkForm(p => ({ ...p, floor: e.target.value }))} />
-            <select value={bulkForm.floor_tipo} onChange={e => setBulkForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
-              <option value="">Tipo Pav....</option>
+          <p className="text-xs text-gray-500 font-medium -mt-1">Campos em branco não serão alterados. Unidade (o nome) não entra: cada uma tem o seu; Elevação vem do pavimento.</p>
+          {/* Na ordem das colunas da tabela (27/11/2026, "incluir todas as colunas na edição em lote": faltava Vagas). */}
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
+            <input type="number" aria-label="Pavimento" className={loteCls} placeholder="Pavimento nº" value={bulkForm.floor} onChange={e => setBulkForm(p => ({ ...p, floor: e.target.value }))} />
+            <select aria-label="Tipo do pavimento" value={bulkForm.floor_tipo} onChange={e => setBulkForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))}
+              className={loteCls}>
+              <option value="">Tipo pav.…</option>
               {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
             </select>
-            <input className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Tipologia..." value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
-            <input type="number" step="0.01" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Área Comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Dormitórios" value={bulkForm.bedrooms} onChange={e => setBulkForm(p => ({ ...p, bedrooms: e.target.value }))} />
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Banheiros" value={bulkForm.bathrooms} onChange={e => setBulkForm(p => ({ ...p, bathrooms: e.target.value }))} />
-            <input type="number" className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Suítes" value={bulkForm.suites} onChange={e => setBulkForm(p => ({ ...p, suites: e.target.value }))} />
-            <select value={bulkForm.position_type} onChange={e => setBulkForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
-              <option value="">Posição...</option>
+            <input aria-label="Tipologia" className={loteCls} placeholder="Tipologia" value={bulkForm.typology} onChange={e => setBulkForm(p => ({ ...p, typology: e.target.value }))} />
+            <input type="number" step="0.01" aria-label="Área privativa (m²)" className={loteCls} placeholder="Área priv. m²" value={bulkForm.private_area} onChange={e => setBulkForm(p => ({ ...p, private_area: e.target.value }))} />
+            <input type="number" step="0.01" aria-label="Área comum (m²)" className={loteCls} placeholder="Área comum m²" value={bulkForm.common_area} onChange={e => setBulkForm(p => ({ ...p, common_area: e.target.value }))} />
+            <input type="number" aria-label="Dormitórios" className={loteCls} placeholder="Dormitórios" value={bulkForm.bedrooms} onChange={e => setBulkForm(p => ({ ...p, bedrooms: e.target.value }))} />
+            <input type="number" aria-label="Banheiros" className={loteCls} placeholder="Banheiros" value={bulkForm.bathrooms} onChange={e => setBulkForm(p => ({ ...p, bathrooms: e.target.value }))} />
+            <input type="number" aria-label="Suítes" className={loteCls} placeholder="Suítes" value={bulkForm.suites} onChange={e => setBulkForm(p => ({ ...p, suites: e.target.value }))} />
+            <input type="number" aria-label="Vagas" className={loteCls} placeholder="Vagas" value={bulkForm.parking_spaces} onChange={e => setBulkForm(p => ({ ...p, parking_spaces: e.target.value }))} />
+            <select aria-label="Posição" value={bulkForm.position_type} onChange={e => setBulkForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))}
+              className={loteCls}>
+              <option value="">Posição…</option>
               {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
             </select>
-            <select value={bulkForm.view_type} onChange={e => setBulkForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
-              <option value="">Vista...</option>
+            <select aria-label="Vista" value={bulkForm.view_type} onChange={e => setBulkForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))}
+              className={loteCls}>
+              <option value="">Vista…</option>
               {(Object.keys(VIEW_LABEL) as UnitViewType[]).map(t => <option key={t} value={t}>{VIEW_LABEL[t]}</option>)}
             </select>
-            <select value={bulkForm.sun_orientation} onChange={e => setBulkForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
-              <option value="">Orientação...</option>
+            <select aria-label="Orientação" value={bulkForm.sun_orientation} onChange={e => setBulkForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))}
+              className={loteCls}>
+              <option value="">Orientação…</option>
               {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
             </select>
             {/* Eixo de locação — aluguel-alvo herdado ao publicar em Locações */}
-            <MoneyCentsInput className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-medium outline-none focus:border-blue-400" placeholder="Aluguel-alvo R$" value={bulkForm.rental_price} onChange={v => setBulkForm(p => ({ ...p, rental_price: v }))} />
-            <select value={bulkForm.rental_status} onChange={e => setBulkForm(p => ({ ...p, rental_status: e.target.value as RentalUnitStatus | '' }))}
-              className="px-2 py-1.5 border border-gray-200 rounded-[6px] text-xs font-semibold outline-none focus:border-blue-400">
-              <option value="">Status locação...</option>
+            <MoneyCentsInput aria-label="Aluguel-alvo" className={loteCls} placeholder="Aluguel-alvo R$" value={bulkForm.rental_price} onChange={v => setBulkForm(p => ({ ...p, rental_price: v }))} />
+            <select aria-label="Status de locação" value={bulkForm.rental_status} onChange={e => setBulkForm(p => ({ ...p, rental_status: e.target.value as RentalUnitStatus | '' }))}
+              className={loteCls}>
+              <option value="">Locação…</option>
               {(Object.keys(RENTAL_STATUS_LABEL) as RentalUnitStatus[]).map(t => <option key={t} value={t}>{RENTAL_STATUS_LABEL[t]}</option>)}
             </select>
             <button
               onClick={handleBulkSave}
               disabled={bulkSaving}
-              className="flex items-center justify-center gap-1.5 h-8 px-3 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-xs transition-all active:scale-95 disabled:opacity-50"
+              className="flex items-center justify-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-sm transition-all active:scale-95 disabled:opacity-50"
             >
               {bulkSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
               Aplicar

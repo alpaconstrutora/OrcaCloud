@@ -28,6 +28,8 @@ export interface TipologiasNoCadastro {
     unidades: (string | null)[];
     /** A tipologia de cada imóvel do prédio do estoque (uma entrada por imóvel). */
     imoveis: (string | null)[];
+    /** A área privativa de cada unidade, na mesma posição de `unidades` (27/11/2026: identifica a tipologia). */
+    areasDasUnidades?: (number | null)[];
 }
 
 export const empreendimentoTipologiaPlantasService = {
@@ -67,7 +69,7 @@ export const empreendimentoTipologiaPlantasService = {
         const [unidades, imoveis] = await Promise.all([
             torres.length === 0
                 ? Promise.resolve({ data: [], error: null })
-                : supabase.from('empreendimento_units').select('typology').in('tower_id', torres),
+                : supabase.from('empreendimento_units').select('typology, private_area').in('tower_id', torres),
             buildingId
                 ? supabase.from('commercial_properties').select('typology').eq('parent_id', buildingId).neq('type', 'BUILDING')
                 : Promise.resolve({ data: [], error: null }),
@@ -76,6 +78,7 @@ export const empreendimentoTipologiaPlantasService = {
         if (imoveis.error) throw imoveis.error;
         return {
             unidades: ((unidades.data ?? []) as { typology: string | null }[]).map(u => u.typology),
+            areasDasUnidades: ((unidades.data ?? []) as { private_area?: number | null }[]).map(u => u.private_area ?? null),
             imoveis: ((imoveis.data ?? []) as { typology: string | null }[]).map(i => i.typology),
         };
     },

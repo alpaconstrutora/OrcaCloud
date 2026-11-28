@@ -18,7 +18,7 @@ import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import { empreendimentoTipologiaPlantasService } from '../../services/empreendimentoTipologiaPlantasService';
 import { empreendimentoTipologiaDecoradoService } from '../../services/empreendimentoTipologiaDecoradoService';
-import { tipologiasDoEmpreendimento } from '../../utils/espelhoPlantaDaTipologia';
+import { textoDaAreaPrivativa, tipologiasDoEmpreendimento } from '../../utils/espelhoPlantaDaTipologia';
 import {
   MAXIMO_DE_AMBIENTES,
   TAMANHO_DO_NOME_DO_AMBIENTE,
@@ -42,6 +42,8 @@ interface TipologiaDoDecorado {
   chave: string;
   rotulo: string;
   unidades: number;
+  /** Identifica a tipologia ao lado do nome (27/11/2026). */
+  areaPrivativa?: { min: number; max: number } | null;
 }
 
 const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
@@ -70,7 +72,7 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
     ])
       .then(([doCadastro, gravadas]) => {
         if (!vivo) return;
-        const emUso = tipologiasDoEmpreendimento({ ...doCadastro, plantas: [] }).map(({ chave, rotulo, unidades }) => ({ chave, rotulo, unidades }));
+        const emUso = tipologiasDoEmpreendimento({ ...doCadastro, plantas: [] }).map(({ chave, rotulo, unidades, areaPrivativa }) => ({ chave, rotulo, unidades, areaPrivativa }));
         // A tipologia que saiu do cadastro mas ainda tem decorado aparece no fim, com 0 unidades, para poder ser limpa.
         const conhecidas = new Set(emUso.map((t) => t.chave));
         const orfas = new Map<string, TipologiaDoDecorado>();
@@ -225,6 +227,7 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
                 className={`h-9 px-3 rounded-[6px] border text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${t.chave === escolhida ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
               >
                 {t.rotulo}
+                {t.areaPrivativa && <span className={`ml-1.5 text-xs ${t.chave === escolhida ? 'text-blue-700' : 'text-gray-600'}`} data-testid={`decorado-area-${t.chave}`}>· {textoDaAreaPrivativa(t.areaPrivativa)}</span>}
                 <span className={`ml-2 text-xs ${t.chave === escolhida ? 'text-blue-600' : 'text-gray-500'}`}>{resumoDe(t)}</span>
               </button>
             ))}

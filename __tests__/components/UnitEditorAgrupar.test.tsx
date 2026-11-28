@@ -81,6 +81,21 @@ describe('Torres e Unidades › Agrupar', () => {
     expect(chaves.filter(Boolean)).toHaveLength(15);
   });
 
+  it('edição em lote tem todas as colunas editáveis, inclusive Vagas, e grava o que foi preenchido (27/11/2026)', async () => {
+    svc.updateUnit.mockImplementation(async (id: string, p: Record<string, unknown>) => ({ id, ...p }));
+    render(<UnitEditor tower={TORRE as never} />);
+    await waitFor(() => expect(nomesNaTela()).toHaveLength(3));
+    const linha101 = screen.getAllByRole('row').find(r => within(r).queryAllByRole('cell')[1]?.textContent === '101')!;
+    await userEvent.click(within(linha101).getByRole('checkbox'));
+    for (const campo of ['Pavimento', 'Tipo do pavimento', 'Tipologia', 'Área privativa (m²)', 'Área comum (m²)', 'Dormitórios',
+      'Banheiros', 'Suítes', 'Vagas', 'Posição', 'Vista', 'Orientação']) {
+      expect(screen.getByLabelText(campo)).toBeInTheDocument();
+    }
+    await userEvent.type(screen.getByLabelText('Vagas'), '2');
+    await userEvent.click(screen.getByRole('button', { name: /Aplicar/ }));
+    await waitFor(() => expect(svc.updateUnit).toHaveBeenCalledWith('101', { parking_spaces: 2 }));
+  });
+
   it('seletor de colunas: esconde a coluna e mantém o cabeçalho do grupo e o total alinhados (25/11/2026)', async () => {
     render(<UnitEditor tower={TORRE as never} />);
     await waitFor(() => expect(nomesNaTela()).toHaveLength(3));

@@ -117,7 +117,13 @@ describe('Torres & Unidades › sub-abas', () => {
     expect(total).toHaveTextContent('Total geral (2 torres)');
     expect(total).toHaveTextContent('Unidades4');
     // Acima da tabela de unidades (guia §6.14): vem antes no documento.
-    const tabela = screen.getByTestId('secao-unidades').querySelector('table')!;
+    // O total vem do pai (já carregado); a tabela, do UnitEditor, que ainda carrega — esperar por ela (na CI, mais
+    // lenta, o querySelector chegou antes da tabela e deu null).
+    const tabela = await waitFor(() => {
+      const t = screen.getByTestId('secao-unidades').querySelector('table');
+      expect(t).not.toBeNull();
+      return t!;
+    });
     expect(total.compareDocumentPosition(tabela) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 

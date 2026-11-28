@@ -8,7 +8,12 @@ exige"* — e perguntou: *"Quer que eu corrija isso numa frente separada?"*. O u
 
 > sim
 
-Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026
+Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026, à noite
+
+Revisão r1 (28/11/2026, revisor da coordenação, mesma sessão): (1) aprovação velha valendo para
+texto novo — o cliente punha PENDENTE direto com a cadeia antiga e o "nível 2" sem aprovador
+cadastrado era aprovado por qualquer membro; (2) INSERT direto de ofício já emitido; (3) comentar
+que o corpo copiado chama `fn_alcada_org_condominio` (só a 915100 cria); (4) horário do pedido.
 
 ## O que foi encontrado (27/11/2026, antes de corrigir)
 
@@ -45,6 +50,9 @@ Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026
 | 27/11 | Trava nova só para ofício, ou a da 915100? | A da 915100, **sem mudar o corpo** (uma regra só, já revisada), ligada só em `doc_gen_documentos`. A função só é criada se não existir — a 915100, quando aplicada, prevalece e estende às 8 tabelas. |
 | 27/11 | Corrigir as outras 7 tabelas aqui? | Não (escopo do pedido). Listadas abaixo, com prova; a 915100 precisa de conserto antes de aplicar. |
 
+| 28/11 (r1) | Como impedir que a aprovação de um texto valha para outro? | Pela API o ofício nunca entra em PENDENTE direto — só por `fn_alcada_enviar`, que zera a cadeia (gatilho próprio, sem mexer no corpo de `fn_alcada_guarda`). |
+| 28/11 (r1) | INSERT de ofício não rascunho | Recusado para qualquer escritor sem `docgen.emitindo`; nenhum caminho legítimo insere ofício emitido (conferido em pg_proc e supabase/). Compatível com `trg_doc_gen_edital_assembleia` (feat/edital-assembleia). |
+
 ## Plano
 
 1. `supabase/migrations/aplicar_20271128410000_docgen_aprovacao_trava.sql`. **Muda**: cria
@@ -60,6 +68,12 @@ Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026
    reenviar e emitir, retirar da aprovação, rejeitar e reenviar, modelo sem exigência emite
    direto, prazo do emitido). **Pronto quando**: sem a migration falha em "a marca o rascunho
    APROVADO direto (PATCH)" (veio `ok:1`); com ela, `TUDO OK`.
+3. (r1) A mesma migration ganha `fn_doc_gen_trava_entrada` + `trg_doc_gen_trava_entrada`
+   (BEFORE INSERT OR UPDATE): pela API, nada entra em PENDENTE direto; INSERT nasce RASCUNHO sem
+   `numero`/`emitido_*` salvo com `docgen.emitindo`. Comentário sobre `fn_alcada_org_condominio`.
+   **Pronto quando**: as seções 7 e 8 da prova falham com a versão r0 da migration (veio `ok:1`
+   em "r1: a troca o texto do aprovado e põe PENDENTE no mesmo PATCH" e em "r1: a insere ofício
+   já EMITIDO com número") e dão `TUDO OK` com a r1, aplicada 1× e 2×.
 
 ## Estado
 
@@ -68,6 +82,11 @@ Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026
 - [x] 1 migration — escrita; ensaio `TUDO OK` (1× e 2×); **não aplicada** (com o usuário).
 - [x] 2 prova — RED sem a migration (`FALHOU: a marca o rascunho APROVADO direto (PATCH) (veio
   ok:1 …)`), `TUDO OK` com ela.
+- [x] 3 r1 — RED com a r0 nas seções 7 e 8; `TUDO OK` com a r1 (1× e 2×). Prova do edital
+  (feat/edital-assembleia) com as duas migrations: só o caso "INSERT direto de edital já aprovado
+  recusado" muda — continua recusado (42501), mas com a mensagem de `trg_alcada_guarda`, que
+  dispara antes da do edital; com esse caso aceitando qualquer 42501, `TUDO OK`. Ajuste é na
+  prova do edital (ou na ordem do gatilho dela), não aqui.
 - [ ] aplicar a migration e rodar a prova direto (usuário).
 
 ### Fora deste PR (mesmo padrão, sem correção aqui)

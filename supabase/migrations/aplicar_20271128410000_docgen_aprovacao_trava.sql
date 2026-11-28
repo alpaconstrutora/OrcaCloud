@@ -1,6 +1,6 @@
 -- ==========================================================================
--- Ofícios: só a aprovação marca o ofício como aprovado
--- Date: 2026-11-28 (pedido de 27/11/2026)
+-- Ofícios: só a aprovação marca o ofício como aprovado (e ofício não nasce emitido)
+-- Date: 2026-11-28 (pedido de 27/11/2026; revisão r1 em 28/11)
 -- Plano: docs/planos/2026-11-27-docgen-aprovacao-trava.md
 -- Prova: scripts/teste-docgen-aprovacao-trava.sql
 -- Base:  fn_alcada_guarda de aplicar_20271118915100_alcada_trava_servidor.sql (F14, PR #576),
@@ -21,6 +21,17 @@
 --   A trava que fecha isso já existe — fn_alcada_guarda, na aplicar_20271118915100 — mas essa
 --   migration nunca foi aplicada (em 27/11 trg_alcada_guarda não existe em nenhuma tabela).
 --
+--   Revisão r1 (28/11) — dois buracos que a trava da 915100 sozinha deixa no ofício:
+--   1. Aprovação velha valendo para texto novo. fn_doc_gen_congelar devolve APROVADO → RASCUNHO
+--      quando o texto muda, e retirar da aprovação volta a RASCUNHO — nos dois casos a cadeia
+--      fica (é histórico). A trava deixa o cliente pôr PENDENTE direto se a cadeia não mudar
+--      (só fn_alcada_enviar zera a cadeia). Aí fn_alcada_proximo_nivel vê o nível 1 já feito e
+--      pede o 2 — que, sem aprovador cadastrado no nível, qualquer membro aprova: o texto novo
+--      era emitido sem o aprovador ter visto. Também num PATCH só {assunto, approval_status:
+--      'PENDENTE'} sobre o aprovado.
+--   2. Ofício inserido já emitido. fn_doc_gen_congelar é só BEFORE UPDATE e a policy de INSERT
+--      só confere a organização: um membro inseria {status:'EMITIDO', numero:'OF-…', …}.
+--
 -- O QUE MUDA
 --   trg_alcada_guarda (BEFORE INSERT OR UPDATE) SÓ em doc_gen_documentos, com a MESMA função da
 --   915100. Para quem escreve pela API (current_user authenticated/anon) fora das RPCs da alçada:
@@ -36,6 +47,26 @@
 --   Recusa = 42501 "ALCADA_NAO_PERMITE: …" (utils/alcada.mensagemDaAlcada mostra a frase).
 --   Ofício não usa os ramos de internal_transactions/process_instance_steps da função — eles só
 --   rodam nas tabelas deles (TG_TABLE_NAME), e esta migration não liga a trava nelas.
+--   ⚠️ O corpo copiado chama public.fn_alcada_org_condominio(uuid), que SÓ a 915100 cria (não
+--   existe no banco em 28/11). Em doc_gen_documentos é código morto (ramo de
+--   internal_transactions); ligar trg_alcada_guarda em internal_transactions sem aplicar a 915100
+--   inteira QUEBRA toda gravação de título a pagar que mude a organização (função inexistente).
+--
+--   trg_doc_gen_trava_entrada (BEFORE INSERT OR UPDATE, fn_doc_gen_trava_entrada) — r1:
+--     • pela API (current_user authenticated/anon, fora das RPCs da alçada), o ofício NUNCA entra
+--       em PENDENTE direto — nem INSERT PENDENTE, nem UPDATE de outro estado para PENDENTE. Só
+--       fn_alcada_enviar, que zera a cadeia: o texto novo pede o nível 1 de novo. O front já envia
+--       só pela RPC (docGenDocumentoService.enviarParaAprovacao → approvalService.submit).
+--     • QUALQUER escritor: INSERT nasce RASCUNHO, sem numero/emitido_em/emitido_por — salvo com a
+--       marca da emissão (docgen.emitindo = 'on'). Caminhos que inserem ofício, conferidos em 28/11:
+--       só o front (Novo ofício, rascunho). Nenhuma função do banco nem Edge Function faz INSERT em
+--       doc_gen_documentos (pg_proc e supabase/); mover_contrato_organizacao só faz UPDATE da
+--       organização. A frente feat/edital-assembleia (aplicar_20271127960000) cria
+--       trg_doc_gen_edital_assembleia com a mesma regra só para edital (assembleia_id) — nomes não
+--       colidem, e o dela ordena ANTES deste ('…edital…' < '…trava…'): no edital, a mensagem
+--       dela (HINT edital_invalido) é a que aparece para INSERT emitido. Para INSERT de edital já
+--       APROVADO, trg_alcada_guarda (desta migration ou da 915100) dispara antes da dela.
+--     Recusas = 42501 (ALCADA_NAO_PERMITE na primeira, como a trava da alçada).
 --
 -- RELAÇÃO COM A 915100
 --   Esta é a parte "ofício" da 915100, adiantada. A função só é criada se ainda não existir:
@@ -45,8 +76,8 @@
 --
 -- REGRA #7 (CLAUDE.md)
 --   P1: sem policy nova.
---   P2: fn_alcada_guarda é função de gatilho, SECURITY INVOKER de propósito (current_user é
---       quem escreve); REVOKE de PUBLIC e anon, como na 915100. Nenhuma função DEFINER nova.
+--   P2: fn_alcada_guarda e fn_doc_gen_trava_entrada são funções de gatilho, SECURITY INVOKER de
+--       propósito (current_user é quem escreve); REVOKE de PUBLIC e anon. Nenhuma DEFINER nova.
 --   P3: sem Edge Function.
 --
 -- ORDEM: pode ir a qualquer momento — o front já aprova pelas RPCs (aplicar_20271118915000,
@@ -54,12 +85,14 @@
 --
 -- COMO CONFERIR
 --   SELECT tgname FROM pg_trigger WHERE tgrelid = 'public.doc_gen_documentos'::regclass
---      AND NOT tgisinternal ORDER BY 1;   -- trg_alcada_guarda é o primeiro BEFORE
+--      AND NOT tgisinternal ORDER BY 1;   -- trg_alcada_guarda (1º BEFORE) e trg_doc_gen_trava_entrada
 --   npx supabase db query --linked -f scripts/teste-docgen-aprovacao-trava.sql   -- TUDO OK
 --
 -- ROLLBACK
 --   DROP TRIGGER trg_alcada_guarda ON public.doc_gen_documentos;
---   (a função fica: é a da 915100, e sem gatilho não faz nada)
+--   DROP TRIGGER trg_doc_gen_trava_entrada ON public.doc_gen_documentos;
+--   DROP FUNCTION public.fn_doc_gen_trava_entrada();
+--   (fn_alcada_guarda fica: é a da 915100, e sem gatilho não faz nada)
 --
 -- ⚠️ Aplicar à mão: `npx supabase db query --linked -f <este arquivo>`.
 --    NUNCA `supabase db push` (histórico de migrations furado — ver CLAUDE.md).
@@ -240,5 +273,43 @@ REVOKE EXECUTE ON FUNCTION public.fn_alcada_guarda() FROM PUBLIC, anon;
 DROP TRIGGER IF EXISTS trg_alcada_guarda ON public.doc_gen_documentos;
 CREATE TRIGGER trg_alcada_guarda BEFORE INSERT OR UPDATE ON public.doc_gen_documentos
     FOR EACH ROW EXECUTE FUNCTION public.fn_alcada_guarda();
+
+-- ── Entrada do ofício (revisão r1) ─────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.fn_doc_gen_trava_entrada()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $fn$
+DECLARE
+    v_cliente  boolean := current_user IN ('authenticated', 'anon')
+                          AND COALESCE(current_setting('orcacloud.alcada_servidor', true), '') <> 'on';
+    v_emitindo boolean := COALESCE(current_setting('docgen.emitindo', true), '') = 'on';
+BEGIN
+    -- 1. Em aprovação só pela RPC de envio (fn_alcada_enviar zera a cadeia: a aprovação dada a
+    --    um texto anterior não conta para o texto de agora).
+    IF v_cliente AND NEW.approval_status = 'PENDENTE'
+       AND (TG_OP = 'INSERT' OR OLD.approval_status IS DISTINCT FROM 'PENDENTE') THEN
+        RAISE EXCEPTION 'ALCADA_NAO_PERMITE: o ofício vai para aprovação só pelo botão "Enviar para aprovação". Recarregue a tela e tente de novo.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    -- 2. Nasce rascunho, sem número: número e emissão só pela função de emissão.
+    IF TG_OP = 'INSERT' AND NOT v_emitindo
+       AND (NEW.status IS DISTINCT FROM 'RASCUNHO' OR NEW.numero IS NOT NULL
+            OR NEW.emitido_em IS NOT NULL OR NEW.emitido_por IS NOT NULL) THEN
+        RAISE EXCEPTION 'O documento nasce como rascunho: o número sai só pela emissão.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    RETURN NEW;
+END;
+$fn$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_doc_gen_trava_entrada() FROM PUBLIC, anon;
+
+-- Nome depois de trg_doc_gen_edital_assembleia (frente do edital): lá, a mensagem dela vem antes.
+DROP TRIGGER IF EXISTS trg_doc_gen_trava_entrada ON public.doc_gen_documentos;
+CREATE TRIGGER trg_doc_gen_trava_entrada BEFORE INSERT OR UPDATE ON public.doc_gen_documentos
+    FOR EACH ROW EXECUTE FUNCTION public.fn_doc_gen_trava_entrada();
 
 COMMIT;

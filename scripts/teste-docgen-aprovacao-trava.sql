@@ -4,6 +4,10 @@
 --     PATCH approval_status = 'APROVADO' no rascunho (e depois emitir), PENDENTE → APROVADO,
 --     REJEITADO → APROVADO, cadeia forjada, INSERT de rascunho já aprovado ou com passo,
 --     níveis rebaixados no meio da aprovação.
+--   • Revisão r1: aprovação velha não vale para texto novo (o cliente não põe PENDENTE direto —
+--     aprovado com/sem texto trocado, retirado e editado, INSERT PENDENTE; só fn_alcada_enviar,
+--     que zera a cadeia); ofício não nasce emitido (INSERT com status/número/emitido_* recusado
+--     para qualquer escritor sem a marca docgen.emitindo).
 --   • Caminhos legítimos seguem: enviar (fn_alcada_enviar), quem não é aprovador não aprova,
 --     emitir em aprovação é recusado, o aprovador aprova (fn_alcada_aprovar) e o ofício é
 --     emitido; texto alterado depois da aprovação volta a RASCUNHO; retirar da aprovação
@@ -20,6 +24,9 @@
 -- BEGIN … ROLLBACK: não grava nada (sequências avançam, como em todo INSERT desfeito). Falha =
 -- RAISE EXCEPTION 'FALHOU: …'; sucesso = a linha final 'TUDO OK'. Sem a migration, falha no
 -- primeiro caso ("a marca o rascunho APROVADO direto (PATCH)", veio ok:1) — é o RED.
+-- Com a versão r0 da migration (só trg_alcada_guarda), falha em "r1: a troca o texto do aprovado
+-- e põe PENDENTE no mesmo PATCH" (veio ok:1); sem a seção 7, em "r1: a insere ofício já EMITIDO
+-- com número" (veio ok:1).
 --
 -- Ensaio (migration ainda não aplicada; o montador tira o BEGIN;/COMMIT; dela):
 --   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-docgen-aprovacao-trava.sql \
@@ -214,12 +221,80 @@ BEGIN
     PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''APROVADO''', d)), nega,
         'nem no modelo sem exigência o membro forja APROVADO (o histórico mentiria)');
 
-    -- ── 6. a trava é a mesma da alçada, e não fica exposta ───────────────────
+    -- ── 7. aprovação velha não vale para texto novo (revisão r1, achado 1) ────
+    -- A cadeia sobrevive ao "volta a RASCUNHO" (texto editado, retirar). Se o cliente pudesse
+    -- pôr PENDENTE direto, fn_alcada_proximo_nivel veria o nível 1 já feito e pediria o 2 — que,
+    -- sem aprovador cadastrado, qualquer membro aprova: texto novo emitido sem o aprovador ver.
+    d := pg_temp.oficio(org_a, m_exige, 'aprovacao velha');
+    PERFORM pg_temp.da(pg_temp.au(a, format(enviar, d)), 'ok:PENDENTE', 'r1: a envia');
+    PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, 'NULL')), 'ok:APROVADO', 'r1: b aprova');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'assunto = ''TESTE APROVACAO TRAVA trocado'', versao = versao + 1, approval_status = ''PENDENTE''', d)), nega,
+        'r1: a troca o texto do aprovado e põe PENDENTE no mesmo PATCH');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''PENDENTE''', d)), nega,
+        'r1: a põe o aprovado em PENDENTE direto (sem mudar o texto)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'assunto = ''TESTE APROVACAO TRAVA trocado'', versao = versao + 1', d)), 'ok:1',
+        'r1: a edita o aprovado (volta a RASCUNHO, cadeia fica como histórico)');
+    PERFORM pg_temp.confere(pg_temp.st(d) = 'RASCUNHO/RASCUNHO/1/1', 'r1: RASCUNHO com o passo antigo na cadeia');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''PENDENTE''', d)), nega,
+        'r1: depois de editado, a põe PENDENTE direto (reaproveitaria o nível 1 antigo)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, d, '2')), 'P0001:Item não está pendente de aprovação.',
+        'r1: sem PENDENTE, ninguém aprova o "nível 2" do texto novo');
+    PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), '22023:Este modelo exige aprovação antes da emissão.',
+        'r1: texto novo não emite');
+    PERFORM pg_temp.da(pg_temp.au(a, format(enviar, d)), 'ok:PENDENTE', 'r1: a envia pela RPC');
+    PERFORM pg_temp.confere(pg_temp.st(d) = 'RASCUNHO/PENDENTE/1/0', 'r1: o envio pela RPC zera a cadeia');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, d, 'NULL')), 'P0001:ALCADA_NAO_PERMITE: o nível 1 deste item é aprovado por %',
+        'r1: o texto novo volta a pedir o nível 1 (só b)');
+    PERFORM pg_temp.da(pg_temp.au(a, format('WITH u AS (UPDATE public.doc_gen_documentos SET approval_status = ''RASCUNHO'' '
+                                             'WHERE id = %L AND approval_status = ''PENDENTE'' RETURNING 1) SELECT count(*)::text FROM u', d)), 'ok:1',
+        'r1: a retira da aprovação');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'assunto = ''TESTE APROVACAO TRAVA retirado e editado'', versao = versao + 1', d)), 'ok:1',
+        'r1: a edita o retirado');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''PENDENTE''', d)), nega,
+        'r1: retirado e editado, a põe PENDENTE direto');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', approval_status', org_a, m_exige, ', ''PENDENTE''')), nega,
+        'r1: a insere rascunho já PENDENTE');
+    PERFORM pg_temp.da(pg_temp.au(a, format(enviar, d)), 'ok:PENDENTE', 'r1: a envia pela RPC de novo');
+    PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, 'NULL')), 'ok:APROVADO', 'r1: b aprova o texto novo');
+    PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), 'ok:%', 'r1: a emite o texto que b aprovou');
+
+    -- ── 8. ofício não nasce emitido (revisão r1, achado 2) ───────────────────
+    -- fn_doc_gen_congelar é só BEFORE UPDATE: o INSERT direto com status/número de emitido passava.
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', status, numero, emitido_em, emitido_por', org_a, m_livre,
+            format(', ''EMITIDO'', ''OF-999/2026'', now(), %L', email_a))), '42501:O documento nasce como rascunho%',
+        'r1: a insere ofício já EMITIDO com número');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', numero', org_a, m_livre, ', ''OF-998/2026''')), '42501:O documento nasce como rascunho%',
+        'r1: a insere rascunho com número');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', status', org_a, m_livre, ', ''ENVIADO''')), '42501:O documento nasce como rascunho%',
+        'r1: a insere ofício ENVIADO sem número');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', emitido_por', org_a, m_livre, format(', %L', email_a))), '42501:O documento nasce como rascunho%',
+        'r1: a insere rascunho com emitido_por');
+    BEGIN
+        INSERT INTO public.doc_gen_documentos (organization_id, modelo_id, modelo_versao, assunto, status, numero)
+        VALUES (org_a, m_livre, 1, 'TESTE APROVACAO TRAVA servidor', 'EMITIDO', 'OF-997/2026');
+        v := 'ok';
+    EXCEPTION WHEN OTHERS THEN
+        v := SQLSTATE || ':' || SQLERRM;
+    END;
+    PERFORM pg_temp.da(v, '42501:O documento nasce como rascunho%', 'r1: nem o servidor (postgres) insere emitido sem a marca da emissão');
+    PERFORM set_config('docgen.emitindo', 'on', true);
+    INSERT INTO public.doc_gen_documentos (organization_id, modelo_id, modelo_versao, assunto, status, numero)
+    VALUES (org_a, m_livre, 1, 'TESTE APROVACAO TRAVA com marca', 'EMITIDO', 'OF-996/2026');
+    PERFORM set_config('docgen.emitindo', 'off', true);
+    PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.doc_gen_documentos WHERE numero = 'OF-996/2026' AND organization_id = org_a),
+        'r1: com docgen.emitindo (marca da emissão) o servidor insere');
+
+    -- ── 9. as travas estão no lugar, e não ficam expostas ────────────────────
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = 'public.doc_gen_documentos'::regclass
                                        AND t.tgname = 'trg_alcada_guarda' AND NOT t.tgisinternal),
         'trg_alcada_guarda está em doc_gen_documentos');
     PERFORM pg_temp.confere(NOT has_function_privilege('anon', 'public.fn_alcada_guarda()', 'EXECUTE'),
         'anon não executa fn_alcada_guarda');
+    PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = 'public.doc_gen_documentos'::regclass
+                                       AND t.tgname = 'trg_doc_gen_trava_entrada' AND NOT t.tgisinternal),
+        'trg_doc_gen_trava_entrada está em doc_gen_documentos');
+    PERFORM pg_temp.confere(NOT has_function_privilege('anon', 'public.fn_doc_gen_trava_entrada()', 'EXECUTE'),
+        'anon não executa fn_doc_gen_trava_entrada');
 
     RAISE NOTICE 'TUDO OK';
 END $$;

@@ -1,10 +1,12 @@
 import { supabase } from '../lib/supabase';
 import { FinancialTransaction, PurchaseOrderItem, ProjectSettings, FinancialInfo } from '../types';
 import { projectService } from './projectService';
-import { invoiceService } from './invoiceService';
 import { isSystemProject } from '../utils/systemProjects';
 import { measurementRef } from '../lib/receivableRef';
-import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
+import { criarFinanceiroDoPedido, linhaDoRazao, MARCA_PARCELA_SEM_NOTA, type ResultadoSyncPedido } from './pedidoFinanceiroMotor';
+
+// Moram no motor (mesmo código no navegador e na Edge `pedido-recebimento`); reexportados para quem já importava daqui.
+export { MARCA_PARCELA_SEM_NOTA, type ResultadoSyncPedido };
 
 /**
  * Campos de `internal_transactions` que o JSONB do projeto não carrega.
@@ -83,19 +85,6 @@ export function transacoesAindaNaoGravadas<T extends { date?: string; descriptio
     return saida;
 }
 
-/**
- * Início das `notes` de parcela de pedido gerada SEM nota fiscal (botão
- * "Gerar título a pagar"). É por ela que o sync automático reconhece e mantém
- * essas parcelas quando a nota chega depois. Não mude o texto sem migrar as
- * parcelas existentes.
- */
-export const MARCA_PARCELA_SEM_NOTA = 'Gerado sem nota fiscal';
-
-/** O que `syncOrderToFinance` fez: gerou N parcelas, ou por que não gerou. */
-export type ResultadoSyncPedido =
-    | { gerou: number }
-    | { pulou: 'pedido-nao-encontrado' | 'status' | 'sem-nota' | 'titulo-da-nota' | 'sem-obra' | 'ja-pago' | 'gerado-sem-nota'; motivo: string };
-
 export const financialService = {
     /**
      * Adds a transaction to a project's financial settings.
@@ -137,33 +126,12 @@ export const financialService = {
         // Sync to internal_transactions — fonte de vw_payables / vw_receivables.
         // due_date e business_status são obrigatórios de fato: as views derivam
         // VENCIDO deles, e sem due_date a parcela nasce sem vencimento na tela.
-        const txDate = newTx.date.split('T')[0];
         try {
-            const { error } = await supabase.from('internal_transactions').insert({
-                organization_id: settings.organizationId,
-                source_system: sync?.sourceSystem || 'PROJECT',
-                reference_id: sync?.referenceId || newTx.id,
-                project_id: isSystemProject(project) ? null : projectId,
-                transaction_date: txDate,
-                due_date: txDate,
-                amount: newTx.value,
-                direction: newTx.type === 'INCOME' ? 'CREDIT' : 'DEBIT',
-                description: newTx.description,
-                category: newTx.category,
-                entity_name: sync?.partyName || newTx.supplier || null,
-                party_type: sync?.partyType ?? null,
-                party_name: sync?.partyName || newTx.supplier || null,
-                supplier_id: sync?.supplierId ?? null,
-                purchase_order_id: sync?.purchaseOrderId ?? null,
-                status: newTx.status === 'PAID' ? 'CONCILIATED' : 'PENDING',
-                business_status: newTx.status === 'PAID' ? 'PAGO' : 'PREVISTO',
-                /* Nasce conciliado => nasce com a data da baixa. A trigger
-                   `trg_payment_date_na_baixa` (20270909000002) é BEFORE UPDATE e
-                   não pega INSERT. `txDate` é a data digitada no formulário, que
-                   para lançamento marcado como pago é a data do pagamento
-                   (confirmado com o usuário em 15/08/2026). */
-                payment_date: newTx.status === 'PAID' ? txDate : null
-            });
+            const { error } = await supabase.from('internal_transactions').insert(linhaDoRazao(
+                newTx,
+                { organizationId: settings.organizationId, projectId: isSystemProject(project) ? null : projectId },
+                sync,
+            ));
             if (error) throw error;
         } catch (e) {
             console.error('[FINANCIAL-SYNC] Failed to sync to internal_transactions:', e);
@@ -285,10 +253,6 @@ export const financialService = {
 
 
     /**
-     * Synchronizes an order with the financial module.
-     * Generates a payment forecast if the order is delivered and has an invoice.
-     */
-    /**
      * Gera as parcelas do pedido no Contas a Pagar (JSON da obra + razão).
      *
      * Regra de sempre: pedido Entregue/Recebido/Divergência COM nota fiscal
@@ -302,175 +266,12 @@ export const financialService = {
      *
      * Devolve o que aconteceu: quem chama por botão precisa poder dizer por
      * que nada foi gerado.
+     *
+     * O código mora em `services/pedidoFinanceiroMotor.ts` (o mesmo que a Edge
+     * `pedido-recebimento` usa); aqui roda com a sessão do usuário.
      */
-    async syncOrderToFinance(orderId: string, opcoes: { permitirSemNota?: boolean } = {}): Promise<ResultadoSyncPedido> {
-        // 1. Fetch Order and Supplier separately (Joins on suppliers can fail due to schema caching)
-        const { data: orderRaw, error: orderError } = await supabase
-            .from('purchase_orders')
-            .select('id, number, status, supplier_id, project_id, items, actual_delivery_date, delivery_date, payment_method, payment_term_type, payment_installments, payment_days, bank_account, cost_center, chart_of_accounts')
-            .eq('id', orderId)
-            .single();
-
-        if (orderError || !orderRaw) {
-            console.error("[FINANCIAL] Order not found for sync:", orderId);
-            return { pulou: 'pedido-nao-encontrado', motivo: 'Pedido não encontrado.' };
-        }
-
-        type DbOrder = { id: string; number: string; status: string; supplier_id?: string; project_id?: string; items: PurchaseOrderItem[]; actual_delivery_date?: string; delivery_date?: string; payment_method?: string; payment_term_type?: string; payment_installments?: number; payment_days?: number; bank_account?: string; cost_center?: string; chart_of_accounts?: string; };
-        const order = orderRaw as DbOrder;
-
-        // Fetch supplier name separately
-        let supplierName = 'Fornecedor não identificado';
-        if (order.supplier_id) {
-            const { data: supplier } = await supabase
-                .from('suppliers')
-                .select('name')
-                .eq('id', order.supplier_id)
-                .single();
-            if (supplier) supplierName = supplier.name;
-        }
-
-        // 2. Check Prerequisites: Status MUST be 'Entregue', 'Recebido', or 'Divergência'
-        const allowedStatuses = ['Entregue', 'Recebido', 'Divergência'];
-        if (!allowedStatuses.includes(order.status)) {
-            console.log(`[FINANCIAL] Order ${order.number} status is ${order.status}. Skipping forecast.`);
-            return { pulou: 'status', motivo: `O pedido está "${order.status}". As parcelas são geradas depois da entrega (no FOB, da retirada).` };
-        }
-
-        // 3. Check for Invoices
-        const invoices = await invoiceService.listInvoicesByOrder(orderId);
-        if (invoices.length === 0 && !opcoes.permitirSemNota) {
-            console.log(`[FINANCIAL] Order ${order.number} has no invoices. Skipping forecast.`);
-            return { pulou: 'sem-nota', motivo: 'O pedido não tem nota fiscal vinculada.' };
-        }
-
-        // 3b. A NOTA já lançou o título (Fiscal › "Criar título" com este pedido):
-        // gerar as parcelas do pedido por cima cobraria em dobro (19/10/2026).
-        // Erro de leitura sobe — seguir às cegas seria o próprio dobro.
-        const { data: tituloDaNota, error: tituloErr } = await supabase
-            .from('internal_transactions')
-            .select('id')
-            .eq('purchase_order_id', orderId)
-            .eq('source_system', 'NFE')
-            .eq('direction', 'DEBIT')
-            .neq('status', 'CANCELLED')
-            .limit(1);
-        if (tituloErr) throw tituloErr;
-        if (tituloDaNota && tituloDaNota.length > 0) {
-            console.log(`[FINANCIAL] Order ${order.number} already has an invoice-generated payable. Skipping.`);
-            return { pulou: 'titulo-da-nota', motivo: 'A nota fiscal deste pedido já lançou o título a pagar; as parcelas do pedido não são geradas por cima.' };
-        }
-
-        // 4. Project loading
-        if (!order.project_id) return { pulou: 'sem-obra', motivo: 'O pedido não tem obra — as parcelas moram no financeiro da obra.' };
-        const projectId = order.project_id;
-        const project = await projectService.loadProject(projectId);
-        if (!project) return { pulou: 'sem-obra', motivo: 'Não foi possível abrir a obra do pedido.' };
-
-        const settings = project.settings as ProjectSettings;
-        const info = settings.financialInfo;
-
-        // 5. Prevent Duplicates / Allow Update of Pending
-        const orderTransactions = info?.transactions?.filter(t => t.orderId === orderId) || [];
-        if (orderTransactions.length > 0 && info?.transactions) {
-            const hasStartedPayment = orderTransactions.some(t => t.status !== 'PENDING' && t.status !== 'CANCELLED');
-            if (hasStartedPayment) {
-                console.log(`[FINANCIAL] Order ${order.number} has non-pending transactions. Skipping sync.`);
-                return { pulou: 'ja-pago', motivo: 'O pedido já tem parcela paga ou em pagamento; nada foi regerado.' };
-            }
-
-            // Geradas sem nota pelo botão: o sync automático (nota vinculada
-            // depois, mudança de status) as mantém. Só o próprio botão regera.
-            const geradasSemNota = orderTransactions.some(t => String(t.notes ?? '').startsWith(MARCA_PARCELA_SEM_NOTA));
-            if (geradasSemNota && !opcoes.permitirSemNota) {
-                console.log(`[FINANCIAL] Order ${order.number} has parcels generated without invoice. Keeping them.`);
-                return { pulou: 'gerado-sem-nota', motivo: 'As parcelas foram geradas sem nota fiscal e foram mantidas.' };
-            }
-
-            // Clean up existing pending transactions to allow recreation with fresh data
-            console.log(`[FINANCIAL] Order ${order.number} has pending transactions. Cleaning up for re-sync...`);
-            const cleanedTransactions = info.transactions.filter(t => t.orderId !== orderId);
-
-            await projectService.saveProject({
-                ...project,
-                settings: {
-                    ...settings,
-                    financialInfo: {
-                        ...info,
-                        transactions: cleanedTransactions
-                    }
-                }
-            });
-
-            // O razão também: até 2026-09-17 só o JSON era limpo, e cada re-sync
-            // deixava as parcelas antigas em `internal_transactions` — o Contas a
-            // Pagar (e o portal do fornecedor) somavam parcelas de duas gerações
-            // do mesmo pedido. Só as PENDING: uma parcela já baixada não entra
-            // aqui porque `hasStartedPayment` já retornou acima.
-            const { error: limpezaErr } = await supabase
-                .from('internal_transactions')
-                .delete()
-                .eq('purchase_order_id', orderId)
-                .eq('status', 'PENDING');
-            if (limpezaErr) console.error('[FINANCIAL] Falha ao limpar parcelas antigas do razão:', limpezaErr);
-        }
-
-        // 6. Calculate Values and Terms
-        const total = totalEfetivoDoPedido(order.items);
-        const baseDate = order.actual_delivery_date || order.delivery_date || new Date().toISOString();
-        const paymentMethod = order.payment_method || 'Não inf.';
-        const termType = order.payment_term_type || 'Vista';
-        const installmentsCount = termType === 'Parcelado' ? (order.payment_installments || 1) : 1;
-        const intervalDays = order.payment_days || 30; // Use negotiated days or default to 30
-
-        // 7. Generate Transactions
-        const baseInstallment = Math.round((total / installmentsCount) * 100) / 100;
-
-        for (let i = 0; i < installmentsCount; i++) {
-            // Última parcela absorve o resíduo de centavos para soma exata ao total
-            const installmentValue = i === installmentsCount - 1
-                ? Math.round((total - baseInstallment * (installmentsCount - 1)) * 100) / 100
-                : baseInstallment;
-
-            const dueDate = new Date(baseDate);
-            // intervalDays * (i+1): 30/60/90 ou 28/56/84 — espaçamento uniforme
-            dueDate.setDate(dueDate.getDate() + intervalDays * (i + 1));
-
-            const installmentDesc = installmentsCount > 1
-                ? `Pedido ${order.number} (${i + 1}/${installmentsCount})`
-                : `Pedido ${order.number}`;
-
-            await this.addTransaction(projectId, {
-                date: dueDate.toISOString(),
-                type: 'EXPENSE',
-                category: 'Material',
-                description: `Pagamento PO - ${installmentDesc}`,
-                value: installmentValue,
-                status: 'PENDING',
-                supplier: supplierName,
-                // `supplierId` no JSON: é o que `financialSyncService` copia para
-                // `supplier_id` no upsert do espelho — sem ele, o re-sync da obra
-                // zerava o fornecedor da parcela (medido em 2026-09-17: 12 de 12).
-                supplierId: order.supplier_id ?? undefined,
-                orderId: orderId,
-                bankAccount: order.bank_account,
-                costCenter: order.cost_center,
-                chartOfAccounts: order.chart_of_accounts,
-                notes: invoices.length > 0
-                    ? `Gerado da entrega. Método: ${paymentMethod}. NFe: ${invoices[0].fileName}`
-                    : `${MARCA_PARCELA_SEM_NOTA} (Suprimentos › Pedido). Método: ${paymentMethod}.`
-            }, {
-                sourceSystem: 'PURCHASE_ORDER',
-                partyType: 'SUPPLIER',
-                partyName: supplierName,
-                supplierId: order.supplier_id ?? null,
-                purchaseOrderId: orderId,
-            });
-        }
-
-
-        console.log(`[FINANCIAL] Generated ${installmentsCount} forecast(s) for Order ${order.number}`);
-        return { gerou: installmentsCount };
+    syncOrderToFinance(orderId: string, opcoes: { permitirSemNota?: boolean } = {}): Promise<ResultadoSyncPedido> {
+        return criarFinanceiroDoPedido(supabase).syncOrderToFinance(orderId, opcoes);
     },
 
     /**

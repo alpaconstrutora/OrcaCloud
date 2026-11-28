@@ -41,11 +41,27 @@ const pedido = {
     bank_account: 'Itaú', cost_center: 'CC-1', chart_of_accounts: 'Materiais',
 };
 
+/** Notas vinculadas ao pedido quando o sync roda (vazio = compra sem nota). */
+let notasDoPedido: { id: string; file_name: string }[] = [{ id: 'nf1', file_name: 'nfe.xml' }];
+
+// Desde 27/11/2026 o sync mora em services/pedidoFinanceiroMotor.ts (o mesmo código
+// da Edge `pedido-recebimento`) e fala só com o cliente do banco: lê a obra pelo
+// select enxuto e troca as parcelas pela RPC fn_obra_trocar_parcelas_do_pedido —
+// não há mais projectService/invoiceService no caminho.
 vi.mock('../lib/supabase', () => ({
     supabase: {
+        rpc: async (fn: string, args: { p_project: string; p_order: string; p_novas: Record<string, unknown>[] }) => {
+            if (fn !== 'fn_obra_trocar_parcelas_do_pedido') return { data: null, error: { message: 'rpc inesperada ' + fn } };
+            const atuais = projetoSalvo?.settings.financialInfo.transactions ?? transacoesExistentes;
+            projetoSalvo = { settings: { financialInfo: { transactions: [
+                ...args.p_novas,
+                ...atuais.filter(t => t.orderId !== args.p_order),
+            ] } } };
+            return { data: args.p_novas.length, error: null };
+        },
         from: (tabela: string) => ({
             select: () => {
-                // Cadeia genérica: .eq/.neq encadeiam; .single e .limit resolvem.
+                // Cadeia genérica: .eq/.neq encadeiam; .single/.maybeSingle/.limit/.order resolvem.
                 const cadeia = {
                     eq: () => cadeia,
                     neq: () => cadeia,
@@ -54,14 +70,24 @@ vi.mock('../lib/supabase', () => ({
                         if (tabela === 'suppliers') return { data: { name: 'MCC' }, error: null };
                         return { data: null, error: null };
                     },
+                    maybeSingle: async () => (tabela === 'projects'
+                        ? { data: {
+                            id: PROJETO, name: 'Garden', organization_id: 'org1',
+                            s_org: 'org1', s_is_system: null, s_name: null,
+                            transacoes: projetoSalvo?.settings.financialInfo.transactions ?? transacoesExistentes,
+                        }, error: null }
+                        : { data: null, error: null }),
+                    order: async () => (tabela === 'invoices'
+                        ? { data: notasDoPedido, error: null }
+                        : { data: [], error: null }),
                     limit: async () => (tabela === 'internal_transactions'
                         ? { data: titulosDaNota, error: null }
                         : { data: [], error: null }),
                 };
                 return cadeia;
             },
-            insert: async (linha: Record<string, unknown>) => {
-                if (tabela === 'internal_transactions') inseridos.push(linha);
+            insert: async (linhas: Record<string, unknown> | Record<string, unknown>[]) => {
+                if (tabela === 'internal_transactions') inseridos.push(...(Array.isArray(linhas) ? linhas : [linhas]));
                 return { error: null };
             },
             delete: () => {
@@ -79,25 +105,6 @@ vi.mock('../lib/supabase', () => ({
     },
 }));
 
-vi.mock('../services/projectService', () => ({
-    projectService: {
-        loadProject: async () => ({
-            id: PROJETO,
-            name: 'Garden',
-            settings: {
-                organizationId: 'org1',
-                financialInfo: { transactions: projetoSalvo?.settings.financialInfo.transactions ?? transacoesExistentes },
-            },
-        }),
-        saveProject: async (p: typeof projetoSalvo) => { projetoSalvo = p; return p; },
-    },
-}));
-
-/** Notas vinculadas ao pedido quando o sync roda (vazio = compra sem nota). */
-let notasDoPedido: { id: string; fileName: string }[] = [{ id: 'nf1', fileName: 'nfe.xml' }];
-vi.mock('../services/invoiceService', () => ({
-    invoiceService: { listInvoicesByOrder: async () => notasDoPedido },
-}));
 vi.mock('../utils/systemProjects', () => ({ isSystemProject: () => false }));
 
 import { financialService, MARCA_PARCELA_SEM_NOTA } from '../services/financialService';
@@ -108,7 +115,7 @@ describe('syncOrderToFinance · a parcela precisa ser ACHÁVEL pelo pedido', () 
         apagados.length = 0;
         projetoSalvo = null;
         transacoesExistentes = [];
-        notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
+        notasDoPedido = [{ id: 'nf1', file_name: 'nfe.xml' }];
         titulosDaNota = [];
     });
 
@@ -202,7 +209,7 @@ describe('syncOrderToFinance · compra SEM nota fiscal (botão "Gerar título a 
         transacoesExistentes = [
             { id: 't1', orderId: PEDIDO, status: 'PENDING', notes: `${MARCA_PARCELA_SEM_NOTA} (Suprimentos › Pedido). Método: Pix.` },
         ];
-        notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
+        notasDoPedido = [{ id: 'nf1', file_name: 'nfe.xml' }];
         const r = await financialService.syncOrderToFinance(PEDIDO);
         expect(r).toEqual({ pulou: 'gerado-sem-nota', motivo: expect.any(String) });
         expect(apagados).toHaveLength(0);
@@ -238,7 +245,7 @@ describe('syncOrderToFinance · trava contra cobrança em dobro (19/10/2026)', (
         apagados.length = 0;
         projetoSalvo = null;
         transacoesExistentes = [];
-        notasDoPedido = [{ id: 'nf1', fileName: 'nfe.xml' }];
+        notasDoPedido = [{ id: 'nf1', file_name: 'nfe.xml' }];
         titulosDaNota = [];
     });
 

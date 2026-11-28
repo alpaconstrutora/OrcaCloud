@@ -23,7 +23,8 @@ const RAIZ = process.cwd();
 /** Arquivos que somam/exibem o valor de itens de pedido de compra. */
 const CONSUMIDORES = [
     'services/orderService.ts',
-    'services/financialService.ts',
+    // Desde 27/11/2026 a soma das parcelas do pedido mora no motor (mesmo código da Edge).
+    'services/pedidoFinanceiroMotor.ts',
     'services/matchService.ts',
     'services/negotiationService.ts',
     'services/quotationService.ts',
@@ -52,7 +53,7 @@ describe('trava — valor de item do pedido vem de utils/pedidoItemValor', () =>
     it.each(CONSUMIDORES)('%s importa o helper', arquivo => {
         const src = readFileSync(path.join(RAIZ, arquivo), 'utf8');
         expect(src, `${arquivo}: some \`item.total\` cru — use valorEfetivoDoItem/totalEfetivoDoPedido de utils/pedidoItemValor`)
-            .toMatch(/from '(\.\.\/)+utils\/pedidoItemValor'|from '\.\/pedidoItemValor'/);
+            .toMatch(/from '(\.\.\/)+utils\/pedidoItemValor(\.ts)?'|from '\.\/pedidoItemValor(\.ts)?'/);
     });
 
     it.each(CONSUMIDORES)('%s não soma item.total cru', arquivo => {

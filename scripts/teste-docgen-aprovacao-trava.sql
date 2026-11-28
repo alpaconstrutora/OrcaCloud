@@ -9,6 +9,10 @@
 --     para qualquer escritor sem a marca docgen.emitindo).
 --   • Revisão r2: nem REJEITADO direto (abriria o reenvio, que mantém a cadeia) — pela API a
 --     aprovação só volta a RASCUNHO; rejeição de verdade → reenvio recomeça no nível 1.
+--   • Revisão r3: a exigência (aprovação/assinatura) é a do MODELO NA CRIAÇÃO, guardada no ofício
+--     (doc_gen_documentos.exige_aprovacao/exige_assinatura): desligar no modelo depois não libera
+--     a emissão nem a assinatura; o cliente não grava as colunas; o modelo do ofício só muda no
+--     rascunho antes do envio, para modelo da mesma organização, e a exigência vem do novo.
 --   • Caminhos legítimos seguem: enviar (fn_alcada_enviar), quem não é aprovador não aprova,
 --     emitir em aprovação é recusado, o aprovador aprova (fn_alcada_aprovar) e o ofício é
 --     emitido; texto alterado depois da aprovação volta a RASCUNHO; retirar da aprovação
@@ -26,8 +30,9 @@
 -- RAISE EXCEPTION 'FALHOU: …'; sucesso = a linha final 'TUDO OK'. Sem a migration, falha no
 -- primeiro caso ("a marca o rascunho APROVADO direto (PATCH)", veio ok:1) — é o RED.
 -- Com a versão r0 da migration (só trg_alcada_guarda), falha em "r1: a troca o texto do aprovado
--- e põe PENDENTE no mesmo PATCH" (veio ok:1); sem a seção 7, em "r1: a insere ofício já EMITIDO
+-- e põe PENDENTE no mesmo PATCH" (veio ok:1); sem a seção 6, em "r1: a insere ofício já EMITIDO
 -- com número" (veio ok:1). Com a r1, falha em "r2: a passa o APROVADO para REJEITADO direto" (ok:1).
+-- Com a r2, falha em "r3: o membro desliga a exigência no modelo e emite" (veio ok:OF-…).
 --
 -- Ensaio (migration ainda não aplicada; o montador tira o BEGIN;/COMMIT; dela):
 --   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-docgen-aprovacao-trava.sql \
@@ -38,6 +43,18 @@
 --   npx supabase db query --linked -f scripts/teste-docgen-aprovacao-trava.sql
 
 BEGIN;
+-- r3: ofícios que JÁ existem quando a migration roda (um rascunho e um emitido) — o backfill tem
+-- de preencher a exigência dos dois a partir do modelo. Com a marca da emissão, para o INSERT do
+-- emitido passar também depois de a migration estar aplicada.
+SELECT set_config('docgen.emitindo', 'on', true);
+WITH m AS (
+    INSERT INTO public.doc_gen_modelos (organization_id, nome, exige_aprovacao, exige_assinatura)
+    VALUES ('926cf626-ba49-4ee4-9f35-472822fb90e6', 'TESTE APROVACAO TRAVA backfill', true, true) RETURNING id)
+INSERT INTO public.doc_gen_documentos (organization_id, modelo_id, modelo_versao, assunto, status, numero)
+SELECT '926cf626-ba49-4ee4-9f35-472822fb90e6', m.id, 1, 'TESTE APROVACAO TRAVA backfill ' || s, s,
+       CASE WHEN s = 'EMITIDO' THEN 'OF-995/2026' END
+  FROM m, unnest(ARRAY['RASCUNHO', 'EMITIDO']) s;
+SELECT set_config('docgen.emitindo', 'off', true);
 -- MIGRATION
 
 CREATE FUNCTION pg_temp.confere(p_ok BOOLEAN, p_msg TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
@@ -102,6 +119,7 @@ $$;
 DO $$
 DECLARE
     org_a CONSTANT UUID := '926cf626-ba49-4ee4-9f35-472822fb90e6';
+    org_b UUID; m_outra UUID;
     a UUID; b UUID; email_a TEXT; email_b TEXT;
     m_exige UUID; m_livre UUID; d UUID; v TEXT;
     upd     CONSTANT TEXT := 'WITH u AS (UPDATE public.doc_gen_documentos SET %s WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u';
@@ -223,7 +241,7 @@ BEGIN
     PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''APROVADO''', d)), nega,
         'nem no modelo sem exigência o membro forja APROVADO (o histórico mentiria)');
 
-    -- ── 7. aprovação velha não vale para texto novo (revisão r1, achado 1) ────
+    -- ── 6. aprovação velha não vale para texto novo (revisão r1, achado 1) ────
     -- A cadeia sobrevive ao "volta a RASCUNHO" (texto editado, retirar). Se o cliente pudesse
     -- pôr PENDENTE direto, fn_alcada_proximo_nivel veria o nível 1 já feito e pediria o 2 — que,
     -- sem aprovador cadastrado, qualquer membro aprova: texto novo emitido sem o aprovador ver.
@@ -260,7 +278,7 @@ BEGIN
     PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, 'NULL')), 'ok:APROVADO', 'r1: b aprova o texto novo');
     PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), 'ok:%', 'r1: a emite o texto que b aprovou');
 
-    -- ── 8. ofício não nasce emitido (revisão r1, achado 2) ───────────────────
+    -- ── 7. ofício não nasce emitido (revisão r1, achado 2) ───────────────────
     -- fn_doc_gen_congelar é só BEFORE UPDATE: o INSERT direto com status/número de emitido passava.
     PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', status, numero, emitido_em, emitido_por', org_a, m_livre,
             format(', ''EMITIDO'', ''OF-999/2026'', now(), %L', email_a))), '42501:O documento nasce como rascunho%',
@@ -286,7 +304,7 @@ BEGIN
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.doc_gen_documentos WHERE numero = 'OF-996/2026' AND organization_id = org_a),
         'r1: com docgen.emitindo (marca da emissão) o servidor insere');
 
-    -- ── 10. rejeição forjada + reenvio (revisão r2) ──────────────────────────
+    -- ── 8. rejeição forjada + reenvio (revisão r2) ──────────────────────────
     -- fn_alcada_enviar(p_reenvio => true) exige só REJEITADO e MANTÉM a cadeia. Se o cliente pudesse
     -- gravar REJEITADO direto, a aprovação do texto antigo voltaria a contar no texto novo.
     d := pg_temp.oficio(org_a, m_exige, 'rejeicao forjada');
@@ -323,7 +341,63 @@ BEGIN
     PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, '1')), 'ok:APROVADO', 'r2: b aprova Z');
     PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), 'ok:%', 'r2: a emite o texto que b aprovou');
 
-    -- ── 9. as travas estão no lugar, e não ficam expostas ────────────────────
+    -- ── 9. a exigência é a do modelo na criação (revisão r3) ─────────────────
+    -- doc_gen_emitir lia o modelo ATUAL: qualquer membro desligava exige_aprovacao no editor de
+    -- modelos (ou trocava o modelo do rascunho), emitia e religava.
+    d := pg_temp.oficio(org_a, m_exige, 'modelo desligado');
+    PERFORM pg_temp.da(pg_temp.au(a, format('WITH u AS (UPDATE public.doc_gen_modelos SET exige_aprovacao = false, exige_assinatura = false '
+                                             'WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', m_exige)), 'ok:1',
+        'r3: o membro desliga a exigência no modelo (editar modelo segue livre)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), '22023:Este modelo exige aprovação antes da emissão.',
+        'r3: o membro desliga a exigência no modelo e emite');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.doc_gen_assinar(%L)::text', d)), '22023:Este modelo exige aprovação antes da assinatura.',
+        'r3: nem a assinatura segue o modelo desligado');
+    PERFORM pg_temp.confere((SELECT exige_aprovacao AND NOT exige_assinatura FROM public.doc_gen_documentos WHERE id = d),
+        'r3: o ofício guardou a exigência do modelo na criação');
+    -- criado pelo front depois de desligar: nasce com a exigência de agora (sem as colunas no payload)
+    PERFORM pg_temp.da(pg_temp.au(a, format('WITH i AS (INSERT INTO public.doc_gen_documentos (organization_id, modelo_id, modelo_versao, assunto, destinatario_tipo, destinatario_snapshot) '
+                                             'VALUES (%L, %L, 1, ''TESTE APROVACAO TRAVA front'', ''MANUAL'', ''{"razao_social":"X"}'') RETURNING exige_aprovacao) '
+                                             'SELECT exige_aprovacao::text FROM i', org_a, m_exige)), 'ok:false',
+        'r3: Novo ofício (payload do front, sem as colunas) nasce com a exigência atual do modelo');
+    UPDATE public.doc_gen_modelos SET exige_aprovacao = true WHERE id = m_exige;
+    PERFORM pg_temp.da(pg_temp.au(a, format('WITH i AS (INSERT INTO public.doc_gen_documentos (organization_id, modelo_id, modelo_versao, assunto, destinatario_tipo, destinatario_snapshot) '
+                                             'VALUES (%L, %L, 1, ''TESTE APROVACAO TRAVA front 2'', ''MANUAL'', ''{"razao_social":"X"}'') RETURNING exige_aprovacao) '
+                                             'SELECT exige_aprovacao::text FROM i', org_a, m_exige)), 'ok:true',
+        'r3: religado o modelo, o ofício novo nasce exigindo');
+
+    -- o cliente não grava a exigência
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'exige_aprovacao = false', d)), nega,
+        'r3: a desliga a exigência no próprio ofício');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', exige_aprovacao', org_a, m_exige, ', false')), nega,
+        'r3: a insere ofício dizendo que não exige');
+
+    -- troca de modelo
+    SELECT o.id INTO org_b FROM public.organizations o WHERE o.id <> org_a ORDER BY o.id LIMIT 1;
+    INSERT INTO public.doc_gen_modelos (organization_id, nome, exige_aprovacao)
+    VALUES (org_b, 'TESTE APROVACAO TRAVA outra org', false) RETURNING id INTO m_outra;
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('modelo_id = %L', m_outra), d)), '42501:O modelo tem de ser da mesma organização do ofício.',
+        'r3: a troca o modelo por um de OUTRA organização (a FK não olha a RLS)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, '', org_a, m_outra, '')), '42501:O modelo tem de ser da mesma organização do ofício.',
+        'r3: a cria ofício com modelo de outra organização');
+    PERFORM pg_temp.da(pg_temp.au(a, format(enviar, d)), 'ok:PENDENTE', 'r3: a envia');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('modelo_id = %L', m_livre), d)), '42501:%',
+        'r3: troca de modelo em aprovação recusada');
+    PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, 'NULL')), 'ok:APROVADO', 'r3: b aprova');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('modelo_id = %L', m_livre), d)),
+        '42501:O modelo do ofício só muda no rascunho, antes de enviar para aprovação.',
+        'r3: troca de modelo do aprovado recusada (perderia a aprovação e cairia num modelo sem exigência)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), 'ok:%', 'r3: a emite o aprovado (emissão legítima intacta)');
+
+    d := pg_temp.oficio(org_a, m_exige, 'troca de modelo');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('modelo_id = %L', m_livre), d)), 'ok:1',
+        'r3: no rascunho, a escolhe outro modelo da mesma organização');
+    PERFORM pg_temp.confere((SELECT NOT exige_aprovacao FROM public.doc_gen_documentos WHERE id = d),
+        'r3: a exigência passa a ser a do modelo novo');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('modelo_id = %L', m_exige), d)), 'ok:1', 'r3: a volta ao modelo que exige');
+    PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), '22023:Este modelo exige aprovação antes da emissão.',
+        'r3: de volta ao modelo que exige, não emite sem aprovação');
+
+    -- ── 10. as travas estão no lugar, e não ficam expostas ────────────────────
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = 'public.doc_gen_documentos'::regclass
                                        AND t.tgname = 'trg_alcada_guarda' AND NOT t.tgisinternal),
         'trg_alcada_guarda está em doc_gen_documentos');
@@ -334,6 +408,14 @@ BEGIN
         'trg_doc_gen_trava_entrada está em doc_gen_documentos');
     PERFORM pg_temp.confere(NOT has_function_privilege('anon', 'public.fn_doc_gen_trava_entrada()', 'EXECUTE'),
         'anon não executa fn_doc_gen_trava_entrada');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.doc_gen_documentos WHERE exige_aprovacao IS NULL OR exige_assinatura IS NULL),
+        'r3: nenhum ofício sem a exigência guardada (backfill)');
+    PERFORM pg_temp.confere((SELECT count(*) FROM public.doc_gen_documentos
+                              WHERE assunto LIKE 'TESTE APROVACAO TRAVA backfill %' AND exige_aprovacao AND exige_assinatura) = 2,
+        'r3: o rascunho e o emitido que já existiam receberam a exigência do modelo (backfill)');
+    PERFORM pg_temp.confere(NOT has_function_privilege('anon', 'public.doc_gen_emitir(uuid, jsonb)', 'EXECUTE')
+                            AND NOT has_function_privilege('anon', 'public.doc_gen_assinar(uuid)', 'EXECUTE'),
+        'r3: emitir/assinar recriadas seguem sem EXECUTE para anon');
 
     RAISE NOTICE 'TUDO OK';
 END $$;

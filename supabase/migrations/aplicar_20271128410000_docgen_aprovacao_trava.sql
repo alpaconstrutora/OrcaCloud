@@ -1,6 +1,6 @@
 -- ==========================================================================
 -- Ofícios: só a aprovação marca o ofício como aprovado (e ofício não nasce emitido)
--- Date: 2026-11-28 (pedido de 27/11/2026; revisões r1 e r2 em 28/11)
+-- Date: 2026-11-28 (pedido de 27/11/2026; revisões r1, r2 e r3 em 28/11)
 -- Plano: docs/planos/2026-11-27-docgen-aprovacao-trava.md
 -- Prova: scripts/teste-docgen-aprovacao-trava.sql
 -- Base:  fn_alcada_guarda de aplicar_20271118915100_alcada_trava_servidor.sql (F14, PR #576),
@@ -41,6 +41,13 @@
 --   a aprova → APROVADO → OF-0001/2026 emitido com o texto Y, que b não viu. Variantes: APROVADO
 --   → REJEITADO direto; PENDENTE com nível 1 dado → REJEITADO direto.
 --
+--   Revisão r3 (28/11, decisão do usuário) — a porta do MODELO. doc_gen_emitir (e doc_gen_assinar)
+--   liam exige_aprovacao/exige_assinatura do modelo ATUAL. Qualquer membro edita modelos (RLS
+--   doc_gen_modelos_update: só a organização): desligava a exigência, emitia e religava. Ou trocava
+--   o modelo_id do rascunho — modelo_id está fora de v_fora_do_texto, e a FK não olha a RLS, então
+--   valia até modelo de OUTRA organização. Provado com a r2: desligar no modelo → emitir →
+--   ok:OF-0006/2026 (BEGIN … ROLLBACK).
+--
 -- O QUE MUDA
 --   trg_alcada_guarda (BEFORE INSERT OR UPDATE) SÓ em doc_gen_documentos, com a MESMA função da
 --   915100. Para quem escreve pela API (current_user authenticated/anon) fora das RPCs da alçada:
@@ -74,14 +81,36 @@
 --       rejeita por fn_alcada_rejeitar, retirarDaAprovacao grava 'RASCUNHO'.
 --     • QUALQUER escritor: INSERT nasce RASCUNHO, sem numero/emitido_em/emitido_por — salvo com a
 --       marca da emissão (docgen.emitindo = 'on'). Caminhos que inserem ofício, conferidos em 28/11:
---       só o front (Novo ofício, rascunho). Nenhuma função do banco nem Edge Function faz INSERT em
---       doc_gen_documentos (pg_proc e supabase/); mover_contrato_organizacao só faz UPDATE da
---       organização. A frente feat/edital-assembleia (aplicar_20271127960000) cria
+--       só o front (Novo ofício, rascunho). Em main, nenhuma função do banco nem Edge Function faz
+--       INSERT em doc_gen_documentos (pg_proc e supabase/); mover_contrato_organizacao só faz
+--       UPDATE da organização. A frente feat/edital-assembleia acrescenta _assembleia_edital_criar
+--       (SECURITY DEFINER), que insere edital RASCUNHO sem número — passa nas duas regras, e a
+--       exigência é preenchida do modelo (DEFINER = servidor, não cliente). A frente feat/edital-assembleia (aplicar_20271127960000) cria
 --       trg_doc_gen_edital_assembleia com a mesma regra só para edital (assembleia_id) — nomes não
 --       colidem, e o dela ordena ANTES deste ('…edital…' < '…trava…'): no edital, a mensagem
 --       dela (HINT edital_invalido) é a que aparece para INSERT emitido. Para INSERT de edital já
 --       APROVADO, trg_alcada_guarda (desta migration ou da 915100) dispara antes da dela.
 --     Recusas = 42501 (ALCADA_NAO_PERMITE na primeira, como a trava da alçada).
+--
+--   r3 — a exigência é a do modelo NA CRIAÇÃO, guardada no ofício:
+--     • colunas doc_gen_documentos.exige_aprovacao / exige_assinatura (NOT NULL, sem default):
+--       preenchidas pelo trg_doc_gen_trava_entrada a partir do modelo no INSERT (o servidor pode
+--       mandar o valor; o cliente não — recusa se mandar). Backfill dos existentes pelo modelo
+--       (0 ofícios em 28/11; idempotente: só as NULL, com fn_doc_gen_congelar e o updated_at
+--       desligados durante o UPDATE — o congelamento recusaria tocar em emitido).
+--     • o cliente não muda as colunas; elas só mudam junto com o modelo_id.
+--     • modelo_id muda pela API só no rascunho ANTES do envio (status E approval_status =
+--       'RASCUNHO') e só para modelo da MESMA organização do ofício (também no INSERT); a
+--       exigência é relida do modelo novo. Escolher, no rascunho, outro modelo da organização que
+--       não exige é legítimo (visível, antes de qualquer aprovação). ⚠️ Fica a porta de QUEM
+--       edita modelos: um membro pode criar/editar um modelo sem exigência e escolher ele antes de
+--       enviar — fechar isso é permissão de editar modelos (decisão de produto), não esta trava.
+--     • doc_gen_emitir e doc_gen_assinar: reescritas da definição VIVA de 28/11
+--       (pg_get_functiondef), mudando só a leitura da exigência (do ofício, não do modelo).
+--       Mensagens iguais. REVOKE/GRANT repetidos (ACL viva: authenticated e service_role).
+--       ⚠️ A frente feat/edital-assembleia (aplicar_20271127960000) troca doc_gen_emitir por um
+--       invólucro de _doc_gen_emitir_nucleo, que lê o modelo: ao rebasear sobre esta, o núcleo tem
+--       de ler v_doc.exige_aprovacao/exige_assinatura.
 --
 -- RELAÇÃO COM A 915100
 --   Esta é a parte "ofício" da 915100, adiantada. A função só é criada se ainda não existir:
@@ -92,7 +121,9 @@
 -- REGRA #7 (CLAUDE.md)
 --   P1: sem policy nova.
 --   P2: fn_alcada_guarda e fn_doc_gen_trava_entrada são funções de gatilho, SECURITY INVOKER de
---       propósito (current_user é quem escreve); REVOKE de PUBLIC e anon. Nenhuma DEFINER nova.
+--       propósito (current_user é quem escreve); REVOKE de PUBLIC e anon. Nenhuma DEFINER nova;
+--       doc_gen_emitir e doc_gen_assinar (DEFINER, recriadas) seguem com a autorização de membro
+--       DENTRO delas, como antes, e o REVOKE de PUBLIC/anon repetido.
 --   P3: sem Edge Function.
 --
 -- ORDEM: pode ir a qualquer momento — o front já aprova pelas RPCs (aplicar_20271118915000,
@@ -107,6 +138,8 @@
 --   DROP TRIGGER trg_alcada_guarda ON public.doc_gen_documentos;
 --   DROP TRIGGER trg_doc_gen_trava_entrada ON public.doc_gen_documentos;
 --   DROP FUNCTION public.fn_doc_gen_trava_entrada();
+--   doc_gen_emitir / doc_gen_assinar: o corpo de aplicar_20271010000500 (leitura do modelo).
+--   As colunas exige_* podem ficar (ninguém mais as lê).
 --   (fn_alcada_guarda fica: é a da 915100, e sem gatilho não faz nada)
 --
 -- ⚠️ Aplicar à mão: `npx supabase db query --linked -f <este arquivo>`.
@@ -115,6 +148,38 @@
 
 BEGIN;
 SET LOCAL lock_timeout = '5s';
+
+-- ── r3: a exigência do modelo, guardada no ofício ─────────────────────────────
+ALTER TABLE public.doc_gen_documentos
+    ADD COLUMN IF NOT EXISTS exige_aprovacao  BOOLEAN,
+    ADD COLUMN IF NOT EXISTS exige_assinatura BOOLEAN;
+COMMENT ON COLUMN public.doc_gen_documentos.exige_aprovacao IS
+  'O que o modelo exigia na criação (ou na troca de modelo, no rascunho): emitir/assinar exigem APROVADO. Só o servidor grava.';
+COMMENT ON COLUMN public.doc_gen_documentos.exige_assinatura IS
+  'O que o modelo exigia na criação (ou na troca de modelo, no rascunho): emitir exige todas as assinaturas. Só o servidor grava.';
+
+DO $do$
+BEGIN
+    IF EXISTS (SELECT 1 FROM public.doc_gen_documentos WHERE exige_aprovacao IS NULL OR exige_assinatura IS NULL) THEN
+        -- O congelamento recusaria tocar em emitido, e o rascunho em aprovação; updated_at não é
+        -- "alguém editou". Desligados só durante este UPDATE.
+        ALTER TABLE public.doc_gen_documentos DISABLE TRIGGER trg_doc_gen_congelar;
+        ALTER TABLE public.doc_gen_documentos DISABLE TRIGGER trg_doc_gen_documentos_updated_at;
+        UPDATE public.doc_gen_documentos d
+           SET exige_aprovacao  = COALESCE(d.exige_aprovacao, m.exige_aprovacao),
+               exige_assinatura = COALESCE(d.exige_assinatura, m.exige_assinatura)
+          FROM public.doc_gen_modelos m
+         WHERE m.id = d.modelo_id
+           AND (d.exige_aprovacao IS NULL OR d.exige_assinatura IS NULL);
+        ALTER TABLE public.doc_gen_documentos ENABLE TRIGGER trg_doc_gen_congelar;
+        ALTER TABLE public.doc_gen_documentos ENABLE TRIGGER trg_doc_gen_documentos_updated_at;
+    END IF;
+END
+$do$;
+
+ALTER TABLE public.doc_gen_documentos
+    ALTER COLUMN exige_aprovacao  SET NOT NULL,
+    ALTER COLUMN exige_assinatura SET NOT NULL;
 
 -- ── A trava (corpo idêntico ao da aplicar_20271118915100; só criada se não existir) ──
 DO $do$
@@ -299,6 +364,7 @@ DECLARE
     v_cliente  boolean := current_user IN ('authenticated', 'anon')
                           AND COALESCE(current_setting('orcacloud.alcada_servidor', true), '') <> 'on';
     v_emitindo boolean := COALESCE(current_setting('docgen.emitindo', true), '') = 'on';
+    v_modelo   record;
 BEGIN
     -- 1. Pela API, a aprovação só RECUA para rascunho (retirar; editar um aprovado). Enviar,
     --    reenviar, aprovar e rejeitar são das RPCs da alçada — senão uma rejeição forjada abriria
@@ -319,6 +385,46 @@ BEGIN
             USING ERRCODE = '42501';
     END IF;
 
+    -- 3. (r3) A exigência é a do modelo na criação, guardada no ofício. O cliente não a grava;
+    --    ela só muda junto com o modelo, e o modelo só muda no rascunho antes do envio, para um
+    --    da mesma organização (a FK aceitaria modelo de qualquer organização).
+    IF TG_OP = 'INSERT' THEN
+        IF v_cliente THEN
+            IF NEW.exige_aprovacao IS NOT NULL OR NEW.exige_assinatura IS NOT NULL THEN
+                RAISE EXCEPTION 'ALCADA_NAO_PERMITE: a exigência de aprovação e assinatura vem do modelo — não se grava no ofício.'
+                    USING ERRCODE = '42501';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM public.doc_gen_modelos m
+                            WHERE m.id = NEW.modelo_id AND m.organization_id = NEW.organization_id) THEN
+                RAISE EXCEPTION 'O modelo tem de ser da mesma organização do ofício.' USING ERRCODE = '42501';
+            END IF;
+        END IF;
+        IF NEW.exige_aprovacao IS NULL OR NEW.exige_assinatura IS NULL THEN
+            SELECT m.exige_aprovacao, m.exige_assinatura INTO v_modelo
+              FROM public.doc_gen_modelos m WHERE m.id = NEW.modelo_id;
+            NEW.exige_aprovacao  := COALESCE(NEW.exige_aprovacao, v_modelo.exige_aprovacao);
+            NEW.exige_assinatura := COALESCE(NEW.exige_assinatura, v_modelo.exige_assinatura);
+        END IF;
+    ELSIF NEW.modelo_id IS DISTINCT FROM OLD.modelo_id THEN
+        IF v_cliente THEN
+            IF OLD.status IS DISTINCT FROM 'RASCUNHO' OR OLD.approval_status IS DISTINCT FROM 'RASCUNHO' THEN
+                RAISE EXCEPTION 'O modelo do ofício só muda no rascunho, antes de enviar para aprovação.' USING ERRCODE = '42501';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM public.doc_gen_modelos m
+                            WHERE m.id = NEW.modelo_id AND m.organization_id = NEW.organization_id) THEN
+                RAISE EXCEPTION 'O modelo tem de ser da mesma organização do ofício.' USING ERRCODE = '42501';
+            END IF;
+        END IF;
+        SELECT m.exige_aprovacao, m.exige_assinatura INTO v_modelo
+          FROM public.doc_gen_modelos m WHERE m.id = NEW.modelo_id;
+        NEW.exige_aprovacao  := v_modelo.exige_aprovacao;
+        NEW.exige_assinatura := v_modelo.exige_assinatura;
+    ELSIF v_cliente AND (NEW.exige_aprovacao IS DISTINCT FROM OLD.exige_aprovacao
+                         OR NEW.exige_assinatura IS DISTINCT FROM OLD.exige_assinatura) THEN
+        RAISE EXCEPTION 'ALCADA_NAO_PERMITE: a exigência de aprovação e assinatura vem do modelo — não se grava no ofício.'
+            USING ERRCODE = '42501';
+    END IF;
+
     RETURN NEW;
 END;
 $fn$;
@@ -329,5 +435,219 @@ REVOKE EXECUTE ON FUNCTION public.fn_doc_gen_trava_entrada() FROM PUBLIC, anon;
 DROP TRIGGER IF EXISTS trg_doc_gen_trava_entrada ON public.doc_gen_documentos;
 CREATE TRIGGER trg_doc_gen_trava_entrada BEFORE INSERT OR UPDATE ON public.doc_gen_documentos
     FOR EACH ROW EXECUTE FUNCTION public.fn_doc_gen_trava_entrada();
+
+-- ── r3: emitir e assinar leem a exigência do OFÍCIO (definição viva de 28/11; só isso muda) ──
+CREATE OR REPLACE FUNCTION public.doc_gen_emitir(p_documento_id uuid, p_values jsonb DEFAULT '{}'::jsonb)
+ RETURNS text
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_doc       public.doc_gen_documentos%ROWTYPE;
+    v_slots     JSONB;
+    v_prefix    TEXT;
+    v_separator TEXT;
+    v_padding   SMALLINT;
+    v_year_suf  BOOLEAN;
+    v_values    JSONB;
+    v_sigla     TEXT;
+    v_org_code  TEXT;
+    v_data      DATE;
+    v_ano       INTEGER;
+    v_token     TEXT;
+    v_parts     TEXT[] := '{}';
+    v_scope     TEXT;
+    v_seq       INTEGER;
+    v_numero    TEXT;
+    v_exige_apr BOOLEAN;
+    v_exige_ass BOOLEAN;
+    v_faltam    TEXT;
+BEGIN
+    SELECT * INTO v_doc FROM public.doc_gen_documentos WHERE id = p_documento_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Documento não encontrado.' USING ERRCODE = 'P0002';
+    END IF;
+
+    -- Autorização AQUI DENTRO (REGRA #7): membro da organização do documento.
+    IF NOT EXISTS (
+        SELECT 1 FROM public.organization_members m
+        WHERE m.organization_id = v_doc.organization_id
+          AND (m.user_id = auth.uid() OR m.email = auth.jwt() ->> 'email')
+    ) THEN
+        RAISE EXCEPTION 'Sem acesso a esta organização.' USING ERRCODE = '42501';
+    END IF;
+
+    -- Idempotente: segundo clique devolve o mesmo número.
+    IF v_doc.status <> 'RASCUNHO' AND v_doc.numero IS NOT NULL AND v_doc.status <> 'CANCELADO' THEN
+        RETURN v_doc.numero;
+    END IF;
+    IF v_doc.status <> 'RASCUNHO' THEN
+        RAISE EXCEPTION 'Só rascunho pode ser emitido.' USING ERRCODE = '22023';
+    END IF;
+    IF COALESCE(btrim(v_doc.assunto), '') = '' OR v_doc.destinatario_snapshot IS NULL THEN
+        RAISE EXCEPTION 'Documento sem assunto ou sem destinatário — não pode ser emitido.' USING ERRCODE = '22023';
+    END IF;
+
+    -- F4: aprovação e assinatura. Revisão r3 (28/11): o que o modelo exigia na CRIAÇÃO do ofício,
+    -- guardado nele — não o modelo de agora, que qualquer membro edita.
+    v_exige_apr := v_doc.exige_aprovacao;
+    v_exige_ass := v_doc.exige_assinatura;
+    IF v_doc.approval_status = 'PENDENTE' THEN
+        RAISE EXCEPTION 'O ofício está em aprovação — aguarde a decisão para emitir.' USING ERRCODE = '22023';
+    END IF;
+    IF COALESCE(v_exige_apr, false) AND v_doc.approval_status <> 'APROVADO' THEN
+        RAISE EXCEPTION 'Este modelo exige aprovação antes da emissão.' USING ERRCODE = '22023';
+    END IF;
+    IF COALESCE(v_exige_ass, false) THEN
+        SELECT string_agg(s ->> 'nome', ', ') INTO v_faltam
+          FROM jsonb_array_elements(COALESCE(v_doc.signatarios, '[]'::jsonb)) s
+         WHERE NOT EXISTS (
+            SELECT 1 FROM public.doc_gen_assinaturas a
+             WHERE a.documento_id = v_doc.id AND a.versao = v_doc.versao AND a.member_id::text = s ->> 'memberId'
+         );
+        IF v_faltam IS NOT NULL THEN
+            RAISE EXCEPTION 'Falta a assinatura de: %.', v_faltam USING ERRCODE = '22023';
+        END IF;
+    END IF;
+
+    -- Máscara da organização, ou o padrão do catálogo (services/documentNumbering/catalog.ts — OFICIO).
+    SELECT slots, prefix, separator, seq_padding, year_suffix
+      INTO v_slots, v_prefix, v_separator, v_padding, v_year_suf
+      FROM public.document_numbering_settings
+     WHERE organization_id = v_doc.organization_id AND doc_type = 'OFICIO';
+    IF NOT FOUND THEN
+        v_slots := '["PREFIX", "DEPARTAMENTO"]'::jsonb;
+        v_prefix := 'OF';
+        v_year_suf := true;
+        -- Separador e dígitos valem para a PÁGINA inteira de Nomenclatura (decisão de
+        -- 2026-08-30): sem linha salva do Ofício, seguem os da organização — senão a
+        -- tela mostraria OF-ENG-0001/2026 e a emissão daria OF-ENG-001/2026.
+        SELECT separator, seq_padding INTO v_separator, v_padding
+          FROM public.document_numbering_settings
+         WHERE organization_id = v_doc.organization_id
+         ORDER BY updated_at DESC
+         LIMIT 1;
+        v_separator := COALESCE(v_separator, '-');
+        v_padding := COALESCE(v_padding, 3);
+    END IF;
+
+    -- Códigos que o banco resolve sozinho; o resto vem do cliente (só entra no texto do número).
+    v_values := COALESCE(p_values, '{}'::jsonb) - 'DEPARTAMENTO' - 'ORGANIZACAO';
+    IF v_doc.department_id IS NOT NULL THEN
+        SELECT NULLIF(btrim(sigla), '') INTO v_sigla FROM public.company_departments WHERE id = v_doc.department_id;
+        IF v_sigla IS NOT NULL THEN v_values := v_values || jsonb_build_object('DEPARTAMENTO', upper(v_sigla)); END IF;
+    END IF;
+    SELECT NULLIF(btrim(code), '') INTO v_org_code FROM public.organizations WHERE id = v_doc.organization_id;
+    IF v_org_code IS NOT NULL THEN v_values := v_values || jsonb_build_object('ORGANIZACAO', v_org_code); END IF;
+
+    -- Data automática = a da emissão (fuso de Brasília).
+    v_data := COALESCE(v_doc.data_documento, (now() AT TIME ZONE 'America/Sao_Paulo')::date);
+    v_ano := EXTRACT(YEAR FROM v_data)::INTEGER;
+
+    -- Escopo do contador = combinação das variáveis da máscara (+ o ano, se reinicia por ano).
+    FOR v_token IN SELECT jsonb_array_elements_text(v_slots)
+    LOOP
+        IF v_token NOT IN ('EMPTY', 'PREFIX') AND COALESCE(v_values ->> v_token, '') <> '' THEN
+            v_parts := v_parts || (v_values ->> v_token);
+        END IF;
+    END LOOP;
+    IF v_year_suf THEN v_parts := v_parts || v_ano::TEXT; END IF;
+    v_scope := array_to_string(v_parts, '|');
+
+    v_seq := public.fn_next_document_seq(v_doc.organization_id, 'OFICIO', v_scope);
+    v_numero := public.fn_format_document_number(v_slots, v_values, v_prefix, v_separator, v_seq, v_padding, v_year_suf, v_ano);
+
+    PERFORM set_config('docgen.emitindo', 'on', true);
+    PERFORM set_config('docgen.evento_dados', jsonb_build_object('numero', v_numero)::text, true);
+    UPDATE public.doc_gen_documentos
+       SET status = 'EMITIDO',
+           numero = v_numero,
+           data_documento = v_data,
+           emitido_por = auth.jwt() ->> 'email',
+           emitido_em = NOW()
+     WHERE id = v_doc.id;
+    PERFORM set_config('docgen.emitindo', 'off', true);
+    PERFORM set_config('docgen.evento_dados', '', true);
+
+    -- A versão salva que vira o documento oficial fica congelada.
+    UPDATE public.doc_gen_documento_versoes
+       SET congelada = true
+     WHERE documento_id = v_doc.id AND versao = v_doc.versao;
+
+    RETURN v_numero;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.doc_gen_emitir(UUID, JSONB) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.doc_gen_emitir(UUID, JSONB) TO authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION public.doc_gen_assinar(p_documento_id uuid)
+ RETURNS timestamp with time zone
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_doc     public.doc_gen_documentos%ROWTYPE;
+    v_membro  RECORD;
+    v_exige   BOOLEAN;
+    v_quando  TIMESTAMPTZ;
+BEGIN
+    SELECT * INTO v_doc FROM public.doc_gen_documentos WHERE id = p_documento_id FOR UPDATE;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Documento não encontrado.' USING ERRCODE = 'P0002';
+    END IF;
+
+    -- Autorização AQUI DENTRO (REGRA #7): quem assina é o membro da sessão.
+    SELECT m.id, COALESCE(NULLIF(btrim(m.name), ''), split_part(m.email, '@', 1)) AS nome, m.email
+      INTO v_membro
+      FROM public.organization_members m
+     WHERE m.organization_id = v_doc.organization_id
+       AND (m.user_id = auth.uid() OR lower(m.email) = lower(auth.jwt() ->> 'email'))
+     LIMIT 1;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Sem acesso a esta organização.' USING ERRCODE = '42501';
+    END IF;
+
+    IF v_doc.status <> 'RASCUNHO' THEN
+        RAISE EXCEPTION 'O ofício já foi emitido — a assinatura é antes da emissão.' USING ERRCODE = '22023';
+    END IF;
+    IF v_doc.approval_status = 'PENDENTE' THEN
+        RAISE EXCEPTION 'O ofício está em aprovação — assine depois da decisão.' USING ERRCODE = '22023';
+    END IF;
+    -- Revisão r3 (28/11): a exigência guardada no ofício, não a do modelo de agora.
+    v_exige := v_doc.exige_aprovacao;
+    IF COALESCE(v_exige, false) AND v_doc.approval_status <> 'APROVADO' THEN
+        RAISE EXCEPTION 'Este modelo exige aprovação antes da assinatura.' USING ERRCODE = '22023';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(COALESCE(v_doc.signatarios, '[]'::jsonb)) s
+         WHERE s ->> 'memberId' = v_membro.id::text
+    ) THEN
+        RAISE EXCEPTION 'Você não é signatário deste ofício.' USING ERRCODE = '42501';
+    END IF;
+
+    INSERT INTO public.doc_gen_assinaturas (documento_id, organization_id, member_id, nome, email, versao)
+    VALUES (v_doc.id, v_doc.organization_id, v_membro.id, v_membro.nome, v_membro.email, v_doc.versao)
+    ON CONFLICT (documento_id, member_id, versao) DO NOTHING
+    RETURNING assinado_em INTO v_quando;
+
+    IF v_quando IS NULL THEN
+        -- Segundo clique: devolve a assinatura que já existe.
+        SELECT assinado_em INTO v_quando FROM public.doc_gen_assinaturas
+         WHERE documento_id = v_doc.id AND member_id = v_membro.id AND versao = v_doc.versao;
+        RETURN v_quando;
+    END IF;
+
+    INSERT INTO public.doc_gen_eventos (documento_id, organization_id, tipo, dados, autor)
+    VALUES (v_doc.id, v_doc.organization_id, 'ASSINADO',
+            jsonb_build_object('nome', v_membro.nome, 'versao', v_doc.versao), v_membro.email);
+    RETURN v_quando;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.doc_gen_assinar(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.doc_gen_assinar(UUID) TO authenticated, service_role;
 
 COMMIT;

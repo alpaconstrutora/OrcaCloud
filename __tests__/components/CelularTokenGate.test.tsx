@@ -21,6 +21,7 @@ const sondas = vi.hoisted(() => ({
   rpc: vi.fn(),
   fontes: [] as unknown[],
   fontesDiario: [] as unknown[],
+  fontesRecebimento: [] as unknown[],
   listar: vi.fn(),
 }))
 
@@ -54,6 +55,17 @@ vi.mock('../../components/celular/DiarioDoLink', async () => {
   return { default: Sonda }
 })
 
+// O Recebimento de verdade é grande; aqui basta quem recebe a fonte do link e a usa ao montar.
+vi.mock('../../components/celular/RecebimentoDoLink', async () => {
+  const R = await import('react')
+  const Sonda: React.FC<{ fonte: { modo: string; listar: () => Promise<unknown> } }> = ({ fonte }) => {
+    sondas.fontesRecebimento.push(fonte)
+    R.useEffect(() => { fonte.listar().catch(() => { /* a tela real mostra o erro */ }) }, [fonte])
+    return R.createElement('div', { 'data-testid': 'tela-do-recebimento' }, `recebimento ${fonte.modo}`)
+  }
+  return { default: Sonda }
+})
+
 import CelularTokenGate, { TEXTO_LINK_INVALIDO } from '../../components/celular/CelularTokenGate'
 import type { SessaoCelular } from '../../services/celular/celularLinkService'
 
@@ -78,6 +90,7 @@ beforeEach(() => {
   sondas.rpc.mockReset()
   sondas.listar.mockReset()
   sondas.fontes.length = 0
+  sondas.fontesRecebimento.length = 0
   sondas.fontesDiario.length = 0
 })
 
@@ -117,8 +130,8 @@ describe('CelularTokenGate', () => {
     expect(seletor.compareDocumentPosition(conteudo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // Nada de seletor (nem navegação "Seções") DEPOIS do conteúdo.
     expect(screen.queryByRole('navigation', { name: 'Seções' })).toBeNull()
-    // Tarefas | Diário | Pedido (Pedido Fast, docs/planos/2026-11-14-pedido-fast.md, Parte 2).
-    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Tarefas', 'Diário', 'Pedido'])
+    // Tarefas | Diário | Pedido (Pedido Fast, 2026-11-14) | Receber (Recebimento, docs/planos/2026-11-27-recebimento-mobile.md).
+    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Tarefas', 'Diário', 'Pedido', 'Receber'])
     for (const aba of screen.getAllByRole('tab')) {
       expect(aba.compareDocumentPosition(conteudo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }
@@ -267,5 +280,18 @@ describe('CelularTokenGate', () => {
       expect(sondas.rpc.mock.calls.filter(([nome]) => nome === 'celular_sessao')).toHaveLength(2))
     await act(async () => { await Promise.resolve() })
     expect(screen.getByTestId('tela-de-tarefas')).toBeInTheDocument()
+  })
+})
+
+describe('aba Receber (Recebimento pelo link)', () => {
+  it('monta o Recebimento com a fonte do link, estável entre renders, e lista pelo token', async () => {
+    responder({ celular_sessao: () => ok(SESSAO), celular_recebimento_listar: () => ok([]) })
+    const { rerender } = render(<CelularTokenGate token={TOKEN} />)
+    await screen.findByTestId('tela-de-tarefas')
+    fireEvent.click(screen.getByRole('tab', { name: 'Receber' }))
+    expect(await screen.findByTestId('tela-do-recebimento')).toHaveTextContent('recebimento link')
+    rerender(<CelularTokenGate token={TOKEN} />)
+    expect(new Set(sondas.fontesRecebimento).size).toBe(1)
+    expect(sondas.rpc).toHaveBeenCalledWith('celular_recebimento_listar', { p_token: TOKEN })
   })
 })

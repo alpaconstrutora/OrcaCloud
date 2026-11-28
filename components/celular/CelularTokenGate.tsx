@@ -1,9 +1,11 @@
 import React from 'react'
-import { AlertCircle, BookOpen, CheckSquare, Loader2, LinkIcon, Receipt, type LucideIcon } from 'lucide-react'
+import { AlertCircle, BookOpen, CheckSquare, Loader2, LinkIcon, PackageCheck, Receipt, type LucideIcon } from 'lucide-react'
 import Button from '../ui/Button'
 import TasksMobileApp from '../TasksMobileApp'
 import DiarioDoLink from './DiarioDoLink'
 import PedidoFastDoLink from './PedidoFastDoLink'
+import RecebimentoDoLink from './RecebimentoDoLink'
+import { criarFonteRecebimento } from '../../services/recebimentoFonte'
 import { celularSessao, type SessaoCelular } from '../../services/celular/celularLinkService'
 import { fonteDoLink, TarefasFonteContext } from '../../services/celular/tarefasFonte'
 import { fonteDiarioDoLink } from '../../services/celular/diarioFonte'
@@ -33,12 +35,14 @@ type Estado =
 export const TEXTO_LINK_INVALIDO = 'Link inválido ou vencido — peça um novo ao administrador'
 
 /** Seções do seletor (pílula) no topo — a única barra de baixo é a de cada seção. */
-type AbaId = 'tarefas' | 'diario' | 'pedido'
+type AbaId = 'tarefas' | 'diario' | 'pedido' | 'recebimento'
 const ABAS: { id: AbaId; rotulo: string; Icone: LucideIcon }[] = [
   { id: 'tarefas', rotulo: 'Tarefas', Icone: CheckSquare },
   { id: 'diario', rotulo: 'Diário', Icone: BookOpen },
   // Pedido Fast (docs/planos/2026-11-14-pedido-fast.md, Parte 2): compra de balcão pela foto.
   { id: 'pedido', rotulo: 'Pedido', Icone: Receipt },
+  // Recebimento (docs/planos/2026-11-27-recebimento-mobile.md, Fase 5): conferir, retirar e mandar a nota.
+  { id: 'recebimento', rotulo: 'Receber', Icone: PackageCheck },
 ]
 
 // ── Telas de estado (mesmo desenho do EmptyState/ErrorState de Minhas Tarefas) ──
@@ -77,6 +81,9 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
 
   // Mesma regra de estabilidade: `PedidoFastFluxo` tem a fonte na dependência da leitura.
   const fontePedido = React.useMemo(() => fontePedidoFastDoLink(token, { aoRecusar }), [token, aoRecusar])
+
+  // E `RecebimentoFluxo` também (a lista recarrega quando a fonte muda).
+  const fonteRecebimento = React.useMemo(() => criarFonteRecebimento({ token, aoRecusar }), [token, aoRecusar])
 
   // Aprovar no Diário segue a organização DO DIÁRIO aberto (`celular_diario_abrir` →
   // `pode_aprovar`), não a do link: o link abre diários de todas as orgs do dono.
@@ -197,7 +204,8 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
                   ativa ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'
                 }`}
               >
-                <Icone className="w-4 h-4" aria-hidden="true" />
+                {/* Quatro abas em 360 px: abaixo de 400 px só o texto. */}
+                <Icone className="hidden min-[400px]:block w-4 h-4" aria-hidden="true" />
                 {rotulo}
               </button>
             )
@@ -221,8 +229,10 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
           </TarefasFonteContext.Provider>
         ) : aba === 'diario' ? (
           <DiarioDoLink fonte={fonteDiario} />
-        ) : (
+        ) : aba === 'pedido' ? (
           <PedidoFastDoLink token={token} fonte={fontePedido} aoRecusar={aoRecusar} />
+        ) : (
+          <RecebimentoDoLink fonte={fonteRecebimento} />
         )}
       </div>
     </div>

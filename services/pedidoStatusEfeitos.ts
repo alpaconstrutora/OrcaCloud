@@ -68,10 +68,13 @@ export const STATUS_QUE_GERAM_PARCELAS = ['Entregue', 'Recebido', 'Divergência'
 export function criarEfeitosDoStatus(deps: DepsDosEfeitos) {
     return {
         /**
-         * @param opcoes.avisarFornecedor false = não reenvia o aviso (reenvio de um
-         *        recebimento que já tinha sido gravado).
+         * @param opcoes.avisarFornecedor false = não reenvia o aviso;
+         * @param opcoes.abrirProcessos   false = não abre processo.
+         * Os dois servem ao REENVIO de uma conferência que já tinha sido gravada
+         * (a rede caiu depois de gravar): só as parcelas são refeitas — o sync é
+         * idempotente; aviso e processo nasceriam de novo.
          */
-        async aplicar(pedido: PedidoDosEfeitos, status: string, opcoes: { avisarFornecedor?: boolean } = {}): Promise<ResultadoDosEfeitos> {
+        async aplicar(pedido: PedidoDosEfeitos, status: string, opcoes: { avisarFornecedor?: boolean; abrirProcessos?: boolean } = {}): Promise<ResultadoDosEfeitos> {
             const resultado: ResultadoDosEfeitos = {};
 
             // 1. Aviso ao fornecedor.
@@ -118,7 +121,7 @@ export function criarEfeitosDoStatus(deps: DepsDosEfeitos) {
             // 2b. Costura P2P — processos (EVENTO) de Recebido/Divergência, na org DO PEDIDO
             // (docs/planos/2026-09-28-torre-p2p-processos.md, Passo 1.1); a da empresa só
             // para pedido antigo sem organization_id.
-            if (status === 'Recebido' || status === 'Divergência') {
+            if (opcoes.abrirProcessos !== false && (status === 'Recebido' || status === 'Divergência')) {
                 try {
                     const eventKey = status === 'Recebido' ? 'purchase_order.received' : 'purchase_order.divergence';
                     const orgId = pedido.organization_id

@@ -58,13 +58,13 @@ describe('criarEfeitosDoStatus', () => {
         expect(r).toEqual({});
     });
 
-    it('avisarFornecedor: false (reenvio de recebimento já gravado) não reenvia o aviso, mas refaz parcelas e processo', async () => {
+    it('reenvio de conferência já gravada (sem aviso, sem processo): só refaz as parcelas', async () => {
         const d = deps();
-        await criarEfeitosDoStatus(d).aplicar(PEDIDO, 'Recebido', { avisarFornecedor: false });
+        await criarEfeitosDoStatus(d).aplicar(PEDIDO, 'Recebido', { avisarFornecedor: false, abrirProcessos: false });
         expect(d.notificar).not.toHaveBeenCalled();
         expect(d.registrarLog).not.toHaveBeenCalled();
         expect(d.financeiro.syncOrderToFinance).toHaveBeenCalled();
-        expect(d.processos.triggerEvent).toHaveBeenCalled();
+        expect(d.processos.triggerEvent).not.toHaveBeenCalled();
     });
 
     it('falha do aviso vira log "failed" e não impede o resto', async () => {

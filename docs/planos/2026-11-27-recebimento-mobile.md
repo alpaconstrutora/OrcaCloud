@@ -221,3 +221,21 @@ ACL (REGRA #7):
 - 2026-11-27: migrations 300000–300400 **aplicadas pelo usuário**. Conferido no banco: 14 funções novas, `received_by`/`origem`,
   gatilho de autoria, CHECK com as ações `recebimento_*`, trava do fornecedor. Provas em produção: `teste-obra-parcelas-atomico`,
   `teste-recebimento-nucleo`, `teste-link-celular-recebimento`, `teste-link-celular-pedido-fast` **TUDO OK**.
+- 2026-11-27: **Fases 3–5 escritas** (PR separado, depois do #797):
+  - Fase 3: Edge `supabase/functions/pedido-recebimento` (`index.ts` + `regras.ts`; `verify_jwt=false` no `config.toml`):
+    portão = JWT (`exigirUsuario`) ou token (`_celular_recebimento_autoriza`), `_recebimento_autoriza_de` em todo pedido;
+    `receber` (regra de lib/recebimento.ts → `_recebimento_registrar_core`; reenvio do mesmo id responde o gravado e só
+    refaz parcelas), `retirada`, `comprovante_subir`, `documento_subir/registrar`, `assinar`. Efeitos pelos motores
+    (`criarFinanceiroDoPedido`, `criarMotor`, `depsComBanco`, textos padrão). Cadeia de imports conferida por script:
+    17 arquivos, todos `.ts`. Ajuste no motor de efeitos: `abrirProcessos: false` no reenvio.
+  - Fase 4: `services/recebimentoFonte.ts` (uma implementação, modo logado/link), `components/suprimentos/recebimento/`
+    (`RecebimentoFluxo`, `RecebimentoDetalhe`, `ConferenciaForm`, `RetiradaForm`, `RecebimentoMobile`);
+    `SupplyChainReceiptManager` abre o mobile abaixo de 768 px (lista completa a um toque; não carrega a lista do
+    computador enquanto está no mobile).
+  - Fase 5: aba **Receber** no `CelularTokenGate` (`RecebimentoDoLink`; ícone some abaixo de 400 px com 4 abas).
+  - REGRA #1: guia lido nas seções que governam a tela (§7.1.3, §8–§17, §20.2–§21, §23.1 "chrome de app mobile",
+    §30, §32–§36 e os checklists); `check-ui-standard.sh` sem violação nos 8 `.tsx`; travas de rótulo, altura de campo,
+    valor em cinza, animação, `dark:` e org verdes.
+  - Testes: `pedidoRecebimentoEdgeRegras` (26), `recebimentoFonte` (11), `components/RecebimentoFluxo` (5), gate com a
+    aba Receber; `tsc` 0.
+  - Fase 6 (computador na mesma regra) ainda não: o computador segue pelo caminho antigo até lá.

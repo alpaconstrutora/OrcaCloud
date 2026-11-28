@@ -7,6 +7,7 @@ import { useOrgContext } from '../hooks/useOrgContext';
 import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento/EmpreendimentoCell';
 import { PurchaseOrder } from '../types';
 import OrderReceiptModal from './OrderReceiptModal';
+import RecebimentoMobile from './suprimentos/recebimento/RecebimentoMobile';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import TabsBar, { TabsBarItem } from './ui/TabsBar';
@@ -129,6 +130,12 @@ interface SupplyChainReceiptManagerProps {
 
 const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ onViewOrder }) => {
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
+    // Celular (< 768 px, lido uma vez — mesmo arranjo de SupplyChainOrderList): abre o
+    // Recebimento mobile; a lista do computador continua a um toque.
+    // docs/planos/2026-11-27-recebimento-mobile.md (Fase 4)
+    const [isMobile] = React.useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+    const [listaCompletaNoCelular, setListaCompletaNoCelular] = React.useState(false);
+    const naVersaoMobile = isMobile && !listaCompletaNoCelular;
     // A tela não recebe organização por prop — `useOrgContext` é a fonte oficial
     // (CLAUDE.md regra #5). `orgId` nulo = "Todas": não bloqueia, a RLS recorta.
     const { orgId } = useOrgContext();
@@ -166,8 +173,10 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
     };
 
     React.useEffect(() => {
+        // Na versão mobile a lista vem do Recebimento mobile; carrega ao abrir a completa.
+        if (naVersaoMobile) return;
         loadOrders();
-    }, []);
+    }, [naVersaoMobile]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -271,6 +280,10 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
         { id: 'received', label: 'Recebidos', badge: orders.filter(o => o.status === 'Recebido').length },
         { id: 'divergent', label: 'Divergências', badge: orders.filter(o => o.status === 'Divergência').length },
     ];
+
+    if (naVersaoMobile) {
+        return <RecebimentoMobile onAbrirListaCompleta={() => setListaCompletaNoCelular(true)} onVerPedido={onViewOrder} />;
+    }
 
     return (
         <div className="space-y-6">

@@ -243,3 +243,18 @@ ACL (REGRA #7):
   `TelaDeAssinatura` › "PDF que não desenha", sem relação e 3/3 local — reexecutado verde). Edge `pedido-recebimento`
   **publicada pelo usuário** (pasta da frente). Sondas no bundle publicado: sem Authorization → 401; só anon → 401
   "Token inválido"; token de link inválido → 403 "link inválido ou vencido"; corpo inválido → 400.
+- 2026-11-28: #799 (Fases 3–5) **no ar** (merge `a17a632`; produção conferida com "Conferir e receber" e "Nada para
+  receber" no bundle; CI da `main` 18/18).
+- 2026-11-28: **Fase 6** — respostas do usuário: "1. sim" (tirar o "Editar Checkout") e "2. sim" (lista do computador
+  respeita o topo).
+  - `OrderReceiptModal` = a MESMA `ConferenciaForm` (sem o cabeçalho de celular) + `recebimento_abrir` + Edge; botão
+    Receber do detalhe e ação da lista por `podeReceber` (CIF já "Em Trânsito"); retirada do detalhe pela Edge.
+  - Lista do computador recorta pela org do topo; "Editar Checkout" removido (criava 2ª conferência por cima).
+  - Sem chamador e removidos: `orderService.confirmOrderReceipt`, `receiptService.createReceipt`,
+    `discrepancyService.createFromReceiptItems` (+ tipos `CreateReceiptItemInput`/`CreateDiscrepancyInput`).
+  - ⚠️ `purchase_receipt.divergence` (4 modelos de processo): nada dispara — com a regra única falta/problema de item
+    vira Divergência do pedido (`purchase_order.divergence`) e o parcial não é divergência. Antes também não disparava
+    na prática (o "Parcial" do modal antigo era inalcançável).
+  - Testes: `components/ReceiptManagerRegraUnica` (novo), `SuprimentosAgrupar` (pedidos com a org do topo),
+    `processosEventosP2P` (bloco do createReceipt removido); `tsc` 0; `check-ui-standard.sh` limpo nos 4 `.tsx`.
+  - Não feito (opcional do plano, sem pedido): REVOKE do INSERT direto em `purchase_receipts` para authenticated.

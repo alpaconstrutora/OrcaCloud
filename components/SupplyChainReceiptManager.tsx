@@ -1,6 +1,5 @@
 import React from 'react';
 import { Truck, Search, RefreshCw, AlertTriangle, Clock, Camera, MoveHorizontal } from 'lucide-react';
-import ActionIconButton from './ui/ActionIconButton';
 import { orderService } from '../services/orderService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { useOrgContext } from '../hooks/useOrgContext';
@@ -8,6 +7,8 @@ import EmpreendimentoCell, { resolveOrderEmpreendimento } from './empreendimento
 import { PurchaseOrder } from '../types';
 import OrderReceiptModal from './OrderReceiptModal';
 import RecebimentoMobile from './suprimentos/recebimento/RecebimentoMobile';
+import { podeReceber } from '../lib/recebimento';
+import { fraseDoFinanceiro } from '../services/recebimentoFonte';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { KpiCard } from './ui/KpiCard';
 import TabsBar, { TabsBarItem } from './ui/TabsBar';
@@ -162,7 +163,10 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
             const data = await orderService.listOrders();
             // Filter only relevant statuses for receipt management
             const relevantStatuses = ['Confirmado', 'Separação', 'Em Trânsito', 'Entregue', 'Recebido', 'Divergência'];
-            const filtered = data.filter(o => relevantStatuses.includes(o.status));
+            // REGRA #5 (28/11/2026, pedido do usuário): com uma organização no topo, só os
+            // pedidos dela — antes a lista mostrava todas as orgs do usuário mesmo assim.
+            // "Todas" (orgId nulo) não filtra: a RLS recorta.
+            const filtered = data.filter(o => relevantStatuses.includes(o.status) && (!orgId || o.organizationId === orgId));
             setOrders(filtered);
         } catch (error) {
             console.error("Erro ao carregar pedidos para recebimento:", error);
@@ -176,7 +180,7 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
         // Na versão mobile a lista vem do Recebimento mobile; carrega ao abrir a completa.
         if (naVersaoMobile) return;
         loadOrders();
-    }, [naVersaoMobile]);
+    }, [naVersaoMobile, orgId]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -442,7 +446,11 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                                 >
                                                     Ver Detalhes
                                                 </button>
-                                                {order.status === 'Entregue' ? (
+                                                {/* Mesma regra do celular (lib/recebimento.ts): CIF já "Em Trânsito",
+                                                    FOB depois da retirada. O "Editar Checkout" de pedido já conferido
+                                                    saiu (28/11/2026, decisão do usuário): criava uma segunda conferência
+                                                    por cima da primeira — com o parcial, o saldo ficaria errado. */}
+                                                {podeReceber(order.status, ehFob(order.deliveryMethod)) ? (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
@@ -450,21 +458,10 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                                                             setShowReceiptModal(true);
                                                         }}
                                                         className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors ml-1"
-                                                        title="Fazer Checkout"
+                                                        title="Conferir e receber"
                                                     >
                                                         <Camera className="w-4 h-4" />
                                                     </button>
-                                                ) : ['Recebido', 'Divergência'].includes(order.status) ? (
-                                                    <ActionIconButton
-                                                        kind="edit"
-                                                        className="ml-1"
-                                                        title="Editar Checkout"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedOrder(order);
-                                                            setShowReceiptModal(true);
-                                                        }}
-                                                    />
                                                 ) : null}
                                             </div>
                                         </td>
@@ -492,7 +489,11 @@ const SupplyChainReceiptManager: React.FC<SupplyChainReceiptManagerProps> = ({ o
                         setShowReceiptModal(false);
                         setSelectedOrder(null);
                     }}
-                    onSave={() => loadOrders()}
+                    onSave={r => {
+                        void loadOrders();
+                        const fin = r ? fraseDoFinanceiro(r.financeiro) : null;
+                        if (r) showToast(fin ? `Recebimento registrado. ${fin}` : 'Recebimento registrado.', 'success');
+                    }}
                 />
             )}
 

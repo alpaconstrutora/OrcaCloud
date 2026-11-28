@@ -10,9 +10,7 @@
  *   2. `triggerForTransaction` só segue para título DEBIT com `purchase_order_id`;
  *   3. `orderService.approveOrder` dispara `purchase_order.approved` só quando a
  *      alçada FECHA (não no nível 1 de 2);
- *   4. `receiptService.createReceipt` dispara `purchase_receipt.divergence` para
- *      Parcial ou item com problema — e NÃO quando o status é 'Divergência'
- *      (esse é do `updateOrder`), nem para recebimento limpo;
+ *   4. (saiu em 28/11/2026 — o recebimento grava pela Edge `pedido-recebimento`; ver nota abaixo.)
  *   5. `payableService.updateStatus('PAGO')` dispara `internal_transaction.paid`;
  *      outros status, não;
  *   6. `bankReconciliationService.createMatch` dispara o mesmo evento após a RPC;
@@ -70,7 +68,6 @@ vi.mock('../utils/storageUtils', () => ({ sanitizeFileName: (s: string) => s }))
 
 import { processService } from '../services/processService';
 import { orderService } from '../services/orderService';
-import { receiptService } from '../services/receiptService';
 import { payableService } from '../services/payableService';
 import { bankReconciliationService } from '../services/bankReconciliationService';
 
@@ -142,24 +139,10 @@ describe('orderService.approveOrder → purchase_order.approved', () => {
     });
 });
 
-describe('receiptService.createReceipt → purchase_receipt.divergence', () => {
-    const item = (recebido: number, issue?: 'quebrado' | 'faltando') =>
-        ({ code: 'c', description: 'd', unit: 'un', quantityOrdered: 10, quantityReceived: recebido, issue });
-
-    it('Parcial dispara; Recebido com item quebrado dispara', async () => {
-        dados.purchase_orders = PEDIDO;
-        await receiptService.createReceipt('po1', { status: 'Parcial', items: [item(10)] });
-        await receiptService.createReceipt('po1', { status: 'Recebido', items: [item(10, 'quebrado')] });
-        expect(disparos.map(d => d.eventKey)).toEqual(['purchase_receipt.divergence', 'purchase_receipt.divergence']);
-    });
-
-    it('Divergência do pedido inteiro NÃO dispara aqui (é do updateOrder); recebimento limpo não dispara', async () => {
-        dados.purchase_orders = PEDIDO;
-        await receiptService.createReceipt('po1', { status: 'Divergência', items: [item(5, 'faltando')] });
-        await receiptService.createReceipt('po1', { status: 'Recebido', items: [item(10)] });
-        expect(disparos).toHaveLength(0);
-    });
-});
+// `receiptService.createReceipt` saiu em 28/11/2026 (o recebimento grava só pela Edge
+// `pedido-recebimento`). Com a regra única (lib/recebimento.ts), falta ou problema de item
+// vira Divergência do PEDIDO — quem dispara é o motor de efeitos (purchase_order.divergence,
+// __tests__/pedidoStatusEfeitos.test.ts); o parcial ("o resto vem depois") não é divergência.
 
 describe('baixa de título → internal_transaction.paid', () => {
     beforeEach(() => {
@@ -188,12 +171,11 @@ describe('baixa de título → internal_transaction.paid', () => {
 });
 
 describe('motor fora não derruba a origem', () => {
-    it('approveOrder, createReceipt e updateStatus resolvem mesmo com o motor lançando', async () => {
+    it('approveOrder e updateStatus resolvem mesmo com o motor lançando', async () => {
         motorFalha = true;
         dados.purchase_orders = PEDIDO;
         dados.internal_transactions = { id: 't1', direction: 'DEBIT', purchase_order_id: 'po1' };
         await expect(orderService.approveOrder('po1', 1, 'g')).resolves.toBeUndefined();
-        await expect(receiptService.createReceipt('po1', { status: 'Parcial', items: [] })).resolves.toBeDefined();
         await expect(payableService.updateStatus('t1', 'PAGO')).resolves.toBeUndefined();
     });
 });

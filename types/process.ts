@@ -233,7 +233,10 @@ export type ProcessEventKey =
     | 'purchase_order.approved'
     /** `nfeService.approveAndLink`/`linkExistingTransaction` — NF-e vinculada a título de um pedido (nasce no nó Nota Fiscal). */
     | 'nfe.linked'
-    /** `receiptService.createReceipt` — recebimento com divergência de ITEM sem o pedido inteiro virar Divergência (nasce no nó Recebimento). */
+    /** Divergência de ITEM sem o pedido inteiro virar Divergência (nó Recebimento). ⚠️ Desde 28/11/2026 nada dispara:
+     *  com a regra única (lib/recebimento.ts) falta/problema de item SEMPRE vira Divergência do pedido
+     *  (`purchase_order.divergence`), e o parcial ("o resto vem depois") não é divergência. Mantido para os
+     *  modelos de processo existentes não quebrarem. */
     | 'purchase_receipt.divergence'
     /** `payableService.updateStatus('PAGO')` / `bankReconciliationService.createMatch` — título DEBIT de um pedido baixado (nasce no nó Contas a Pagar). */
     | 'internal_transaction.paid'

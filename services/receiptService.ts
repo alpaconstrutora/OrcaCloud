@@ -1,6 +1,4 @@
 import { supabase } from '../lib/supabase';
-import { sanitizeFileName } from '../utils/storageUtils';
-import { processService } from './processService';
 
 export interface PurchaseReceiptItem {
     id: string;
@@ -26,95 +24,10 @@ export interface PurchaseReceipt {
     items: PurchaseReceiptItem[];
 }
 
-export interface CreateReceiptItemInput {
-    code: string;
-    description: string;
-    unit: string;
-    quantityOrdered: number;
-    quantityReceived: number;
-    issue?: 'quebrado' | 'faltando';
-    notes?: string;
-}
-
 export const receiptService = {
-    async createReceipt(
-        orderId: string,
-        data: {
-            status: 'Recebido' | 'Divergência' | 'Parcial';
-            notes?: string;
-            photo?: File;
-            items: CreateReceiptItemInput[];
-        }
-    ): Promise<PurchaseReceipt> {
-        let photoPath: string | undefined;
-
-        if (data.photo) {
-            const fileName = `${orderId}/receipt_${Date.now()}_${sanitizeFileName(data.photo.name)}`;
-            const { data: uploaded, error: uploadError } = await supabase.storage
-                .from('receipts')
-                .upload(fileName, data.photo);
-            if (uploadError) throw uploadError;
-            photoPath = uploaded.path;
-        }
-
-        const { data: receipt, error } = await supabase
-            .from('purchase_receipts')
-            .insert({
-                order_id: orderId,
-                status: data.status,
-                notes: data.notes ?? null,
-                photo_path: photoPath ?? null,
-            })
-            .select()
-            .single();
-
-        if (error) throw error;
-
-        if (data.items.length > 0) {
-            const { error: itemsError } = await supabase
-                .from('purchase_receipt_items')
-                .insert(
-                    data.items.map(item => ({
-                        receipt_id: receipt.id,
-                        order_item_code: item.code,
-                        description: item.description,
-                        unit: item.unit,
-                        quantity_ordered: item.quantityOrdered,
-                        quantity_received: item.quantityReceived,
-                        issue: item.issue ?? null,
-                        notes: item.notes ?? null,
-                    }))
-                );
-            if (itemsError) throw itemsError;
-        }
-
-        // Costura P2P (Passo 3 do plano 2026-09-28): divergência DE ITEM que não
-        // vira status 'Divergência' do pedido — recebimento Parcial, ou Recebido
-        // com item quebrado/faltando. Quando o pedido inteiro é marcado
-        // Divergência, quem dispara é `orderService.updateOrder`
-        // (`purchase_order.divergence`); não repetir aqui, senão nascem dois
-        // processos para a mesma divergência. Best-effort.
-        const itemDivergente = data.items.some(i => i.issue || i.quantityReceived < i.quantityOrdered);
-        if (data.status !== 'Divergência' && (data.status === 'Parcial' || itemDivergente)) {
-            try {
-                await processService.triggerPurchaseOrderEvent(orderId, 'purchase_receipt.divergence', { titleSuffix: 'Divergência de itens' });
-            } catch (e) {
-                console.error('[receiptService] process trigger (purchase_receipt.divergence) failed:', e);
-            }
-        }
-
-        return { ...this.mapReceipt(receipt), items: data.items.map((item, i) => ({
-            id: '',
-            receiptId: receipt.id,
-            orderItemCode: item.code,
-            description: item.description,
-            unit: item.unit,
-            quantityOrdered: item.quantityOrdered,
-            quantityReceived: item.quantityReceived,
-            issue: item.issue,
-            notes: item.notes,
-        })) };
-    },
+    // `createReceipt` saiu em 28/11/2026: o recebimento grava SÓ pela Edge
+    // `pedido-recebimento` (núcleo `_recebimento_registrar_core`, atômico com o status
+    // do pedido) — docs/planos/2026-11-27-recebimento-mobile.md, Fase 6.
 
     async listByOrder(orderId: string): Promise<PurchaseReceipt[]> {
         const { data, error } = await supabase

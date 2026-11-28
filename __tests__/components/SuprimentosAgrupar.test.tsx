@@ -58,7 +58,8 @@ vi.mock('../../services/quotationService', () => ({ quotationService: { listRequ
 
 // ── Pedidos / Recebimento ───────────────────────────────────────────
 const pedido = (id: string, supplierName: string, status: string, total: number, organizationName = 'Alpa Construtora') => ({
-    id, number: `PC-${id}`, supplierName, status, organizationName, projectName: 'Obra Garden', created_at: '2026-10-05T10:00:00Z',
+    // organizationId = a do topo (org1): desde 28/11/2026 o Recebimento recorta pelo topo (REGRA #5).
+    id, number: `PC-${id}`, supplierName, status, organizationId: 'org1', organizationName, projectName: 'Obra Garden', created_at: '2026-10-05T10:00:00Z',
     deliveryDate: '2026-10-20', items: [{ total }],
 });
 vi.mock('../../services/orderService', () => ({ orderService: { listOrders: vi.fn(async () => [

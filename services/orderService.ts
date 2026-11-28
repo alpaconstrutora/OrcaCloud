@@ -5,8 +5,6 @@ import { supplierService, getSupplierDisplayName } from './supplierService';
 import { financialService } from './financialService';
 import { criarEfeitosDoStatus } from './pedidoStatusEfeitos';
 import { sanitizeFileName } from '../utils/storageUtils';
-import { receiptService, CreateReceiptItemInput } from './receiptService';
-import { discrepancyService } from './discrepancyService';
 import { notificationLogService } from './notificationLogService';
 import { whatsappService } from './whatsappService';
 import { whatsappOpenwaService, ErroWhatsappOpenwa, type SituacaoOpenwa } from './whatsappOpenwaService';
@@ -525,60 +523,8 @@ export const orderService = {
         };
     },
 
-    async confirmOrderReceipt(orderId: string, updates: {
-        status: 'Recebido' | 'Divergência' | 'Parcial',
-        photo?: File,
-        notes?: string,
-        receiptItems?: CreateReceiptItemInput[],
-        // legacy fields kept for backwards-compat (display fallback)
-        discrepancies?: PurchaseOrder['discrepancyReport'],
-        existingPhotoPath?: string,
-        existingReceivedAt?: string,
-        version?: number
-    }) {
-        // 1. Write to purchase_receipts + purchase_receipt_items
-        const receipt = await receiptService.createReceipt(orderId, {
-            status: updates.status,
-            notes: updates.notes,
-            photo: updates.photo,
-            items: updates.receiptItems ?? [],
-        });
-
-        // 1b. Write discrepancies with workflow tracking
-        const discrepantItems = (updates.receiptItems ?? []).filter(
-            item => item.issue || item.quantityReceived < item.quantityOrdered
-        );
-        if (discrepantItems.length > 0) {
-            await discrepancyService.createFromReceiptItems(
-                orderId,
-                receipt.id,
-                discrepantItems.map(item => ({
-                    orderItemCode: item.code,
-                    description: item.description,
-                    unit: item.unit,
-                    issue: item.issue ?? 'faltando',
-                    quantity: Math.max(0, item.quantityOrdered - item.quantityReceived),
-                    notes: item.notes,
-                }))
-            );
-        }
-
-        // 2. Update order status (and legacy inline fields for display fallback)
-        let photoPath = updates.existingPhotoPath;
-        if (updates.photo) {
-            // photo already uploaded by receiptService; re-upload skipped —
-            // keep existing path or leave empty (legacy field only)
-            photoPath = updates.existingPhotoPath;
-        }
-
-        return this.updateOrder(orderId, {
-            status: updates.status === 'Parcial' ? 'Entregue' : updates.status,
-            receivedAt: updates.existingReceivedAt || new Date().toISOString(),
-            receiptNotes: updates.notes,
-            receiptPhotoPath: photoPath,
-            discrepancyReport: updates.discrepancies
-        }, updates.version);
-    },
+    // `confirmOrderReceipt` saiu em 28/11/2026: conferir/receber grava pela Edge
+    // `pedido-recebimento` (services/recebimentoFonte.ts), a mesma do celular e do link.
 
     async deleteOrder(id: string) {
         const { data: order, error: fetchError } = await supabase

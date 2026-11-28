@@ -30,6 +30,8 @@ import { ThreeWayMatchPanel } from './ThreeWayMatchPanel';
 import OrderLifeline, { OrderStatus } from './OrderLifeline';
 import OrderChat from './OrderChat';
 import OrderReceiptModal from './OrderReceiptModal';
+import { podeReceber } from '../lib/recebimento';
+import { criarFonteRecebimento, fraseDoFinanceiro } from '../services/recebimentoFonte';
 import { ehFob, rotuloStatusLogistico, situacaoDaRetirada } from '../utils/formaEntrega';
 import { hojeLocal } from '../utils/baixaRecebivel';
 import { retiradaPedidoService, type ColaboradorRetirada, type RetiradaDoPedido } from '../services/retiradaPedidoService';
@@ -255,6 +257,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // em jogo (`fornecedorPodeCotar`). Calculado mais abaixo, quando `order`
     // existe — ver `fornecedorPodeEditarCotacao`.
     const [showReceiptModal, setShowReceiptModal] = React.useState(false);
+    // Recebimento e retirada gravam pela Edge `pedido-recebimento` (uma regra com o celular e o link).
+    const fonteRecebimento = React.useMemo(() => criarFonteRecebimento({}), []);
     // FOB: o comprador registra a retirada no Rastreamento logístico (o
     // fornecedor não tem ação na logística do FOB — utils/formaEntrega).
     const [dataRetirada, setDataRetirada] = React.useState(() => hojeLocal());
@@ -521,7 +525,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     // FOB — "Retirado" é o status 'Entregue' com a data da retirada como data
     // de entrega efetiva: é o que libera o botão Receber e serve de base para o
-    // vencimento das parcelas (financialService.syncOrderToFinance).
+    // vencimento das parcelas. Grava pela Edge `pedido-recebimento` (núcleo
+    // `_pedido_retirada_core`), a mesma do Recebimento no celular e no link.
     const handleRegistrarRetirada = () => {
         if (!order || !dataRetirada || !retiradoPorId) return;
         const dataBr = new Date(dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR');
@@ -534,15 +539,14 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 (async () => {
                     setRegistrandoRetirada(true);
                     try {
-                        await orderService.updateOrder(orderId, { status: 'Entregue', actualDeliveryDate: dataRetirada, retiradoPorEmployeeId: retiradoPorId }, order.version);
+                        const r = await fonteRecebimento.registrarRetirada({ orderId, versao: order.version ?? 0, data: dataRetirada, employeeId: retiradoPorId });
                         await loadOrderData();
                         setRetirada(await retiradaPedidoService.get(orderId));
-                        notify('Retirada registrada.');
+                        const fin = fraseDoFinanceiro(r.financeiro);
+                        notify(fin ? `Retirada registrada. ${fin}` : 'Retirada registrada.');
                     } catch (err: unknown) {
                         const error = err instanceof Error ? err : new Error(String(err));
-                        notify(error.message?.startsWith('CONFLICT')
-                            ? 'Pedido foi modificado por outro usuário. Recarregue a página.'
-                            : `Erro ao registrar a retirada: ${error.message}`, 'error');
+                        notify(`Erro ao registrar a retirada: ${error.message}`, 'error');
                         await loadOrderData();
                     } finally {
                         setRegistrandoRetirada(false);
@@ -1269,7 +1273,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         A edição passou para dentro das abas desta tela (o formulário
                         vem abaixo dos cartões), então o botão não tem mais destino. */}
 
-                    {ehComprador && order.status === 'Entregue' && currentUser?.email !== supplierEmail && (
+                    {/* Mesma regra do celular (lib/recebimento.ts): CIF já "Em Trânsito"; FOB depois da retirada. */}
+                    {ehComprador && podeReceber(order.status, ehFob(order.deliveryMethod)) && currentUser?.email !== supplierEmail && (
                         <button
                             onClick={() => setShowReceiptModal(true)}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] text-[13px] font-medium hover:bg-emerald-700 transition-all active:scale-95"
@@ -2615,7 +2620,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 <OrderReceiptModal
                     order={order}
                     onClose={() => setShowReceiptModal(false)}
-                    onSave={() => loadOrderData()}
+                    onSave={r => {
+                        void loadOrderData();
+                        if (!r) return;
+                        const base = r.status === 'Recebido' ? 'Recebimento confirmado.'
+                            : r.status === 'Parcial' ? 'Recebimento parcial registrado — o resto fica a receber.'
+                            : 'Recebimento registrado com divergência.';
+                        const fin = fraseDoFinanceiro(r.financeiro);
+                        notify(fin ? `${base} ${fin}` : base);
+                    }}
                 />
             )}
             {/* Negotiation Modal */}

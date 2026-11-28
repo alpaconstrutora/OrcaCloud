@@ -27,39 +27,9 @@ export interface PurchaseDiscrepancy {
     createdAt: string;
 }
 
-export interface CreateDiscrepancyInput {
-    orderItemCode: string;
-    description: string;
-    unit: string;
-    issue: DiscrepancyIssue;
-    quantity: number;
-    notes?: string;
-}
-
 export const discrepancyService = {
-    async createFromReceiptItems(
-        orderId: string,
-        receiptId: string,
-        items: CreateDiscrepancyInput[]
-    ): Promise<void> {
-        if (items.length === 0) return;
-        const { error } = await supabase
-            .from('purchase_discrepancies')
-            .insert(
-                items.map(item => ({
-                    order_id: orderId,
-                    receipt_id: receiptId,
-                    order_item_code: item.orderItemCode,
-                    description: item.description,
-                    unit: item.unit,
-                    issue: item.issue,
-                    quantity: item.quantity,
-                    notes: item.notes ?? null,
-                    status: 'Pendente',
-                }))
-            );
-        if (error) throw error;
-    },
+    // `createFromReceiptItems` saiu em 28/11/2026: as divergências nascem no núcleo
+    // `_recebimento_registrar_core`, junto com a conferência (Edge `pedido-recebimento`).
 
     async listByOrder(orderId: string): Promise<PurchaseDiscrepancy[]> {
         const { data, error } = await supabase

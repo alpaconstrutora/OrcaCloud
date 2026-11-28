@@ -25,6 +25,8 @@ interface Props {
     saldo: number[];
     onCancelar: () => void;
     onGravado: (r: ResultadoDaConferencia) => void;
+    /** No computador o modal (`OrderReceiptModal`) já tem o título; aqui some o cabeçalho de celular. */
+    semCabecalho?: boolean;
 }
 
 const COR_DA_PREVIA: Record<StatusDoRecebimento, string> = {
@@ -33,7 +35,7 @@ const COR_DA_PREVIA: Record<StatusDoRecebimento, string> = {
 const qtd = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 3 });
 const numero = (s: string) => Number(s.replace(',', '.'));
 
-const ConferenciaForm: React.FC<Props> = ({ fonte, pedido, saldo, onCancelar, onGravado }) => {
+const ConferenciaForm: React.FC<Props> = ({ fonte, pedido, saldo, onCancelar, onGravado, semCabecalho = false }) => {
     const confirm = useConfirm();
     const [receiptId] = React.useState(() => crypto.randomUUID());
     const indices = React.useMemo(() => pedido.itens.map((_, i) => i).filter(i => saldo[i] > 0), [pedido.itens, saldo]);
@@ -96,7 +98,9 @@ const ConferenciaForm: React.FC<Props> = ({ fonte, pedido, saldo, onCancelar, on
 
     return (
         <div className="space-y-6 pb-6">
-            <Cabecalho titulo="Conferir e receber" subtitulo={[pedido.numero, pedido.fornecedor].filter(Boolean).join(' · ')} onVoltar={onCancelar} />
+            {!semCabecalho && (
+                <Cabecalho titulo="Conferir e receber" subtitulo={[pedido.numero, pedido.fornecedor].filter(Boolean).join(' · ')} onVoltar={onCancelar} />
+            )}
 
             <ul className="space-y-3">
                 {indices.map(i => {

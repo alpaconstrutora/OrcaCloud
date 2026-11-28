@@ -6,7 +6,7 @@ O que roda aqui, num **WSL2 Ubuntu dedicado** com **Docker Engine próprio**:
 
 | Serviço  | O que faz | Rede |
 | -------- | --------- | ---- |
-| `openwa` | Gateway do WhatsApp (OpenWA v0.31.0, motor Baileys, SQLite) | porta **só em `127.0.0.1:2785`** (painel/QR local) |
+| `openwa` | Gateway do WhatsApp (OpenWA, build do commit 5eaadd39 — 0.31.x —, motor Baileys, SQLite) | porta **só em `127.0.0.1:2785`** (painel/QR local) |
 | `redis`  | Fila do OpenWA (é ela que dá retentativa ao webhook) | rede interna, sem porta, sem saída |
 | `worker` | Liga **para fora** no Supabase (campainha Realtime + Edge Function `whatsapp-openwa-worker`), pega a fila, envia pelo OpenWA e reporta | sem porta |
 
@@ -31,21 +31,36 @@ No PowerShell do Windows (como administrador):
 wsl --install -d Ubuntu-24.04 --name openwa   # distro só para isto
 ```
 
-Dentro do WSL (`wsl -d openwa`), ligar o systemd (o Docker e o cron precisam):
+A senha do usuário Linux não aparece enquanto se digita (nem asteriscos) — digitar e Enter.
+
+Se colar no terminal do WSL chegar com `^[[200~` na frente, desligar o "bracketed paste"
+(digitar, não colar): `echo 'set enable-bracketed-paste off' >> ~/.inputrc && bind -f ~/.inputrc`.
+
+Dentro do WSL (`wsl -d openwa`), ligar o systemd (o Docker e o cron precisam) **e manter o
+usuário padrão** (o `tee` sem `-a` substitui o arquivo; sem `[user]` a distro passa a abrir
+como root):
 
 ```bash
-sudo tee /etc/wsl.conf >/dev/null <<'EOF'
-[boot]
-systemd=true
-EOF
+printf '[boot]\nsystemd=true\n[user]\ndefault=%s\n' "$USER" | sudo tee /etc/wsl.conf
 ```
 
-Sair e no PowerShell: `wsl --shutdown`; entrar de novo com `wsl -d openwa`.
+Sair e no PowerShell: `wsl --shutdown`; conferir com
+`wsl -d openwa -- bash -c "whoami; systemctl is-system-running"` (usuário + `running`).
 
-**Manter o WSL ligado com o Windows:** no Agendador de Tarefas, criar uma tarefa "Ao
-iniciar o computador", executando com o usuário do escritório, "Executar estando o
-usuário conectado ou não":
-`wsl.exe -d openwa -u root -- sleep infinity`.
+**Manter o WSL ligado com o Windows** — sem isso a distro desliga sozinha quando nenhum
+processo a segura, e o número cai. No **PowerShell como administrador** (o terminal do
+VS Code não serve: "Acesso negado"). Logon S4U = roda sem ninguém entrar na conta e sem
+guardar senha:
+
+```powershell
+$p    = New-ScheduledTaskPrincipal -UserId (whoami) -LogonType S4U -RunLevel Highest
+$acao = New-ScheduledTaskAction -Execute "wsl.exe" -Argument "-d openwa --exec /bin/sleep infinity"
+$gat  = New-ScheduledTaskTrigger -AtStartup
+$conf = New-ScheduledTaskSettingsSet -ExecutionTimeLimit 0 -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+Register-ScheduledTask -TaskName "OpenWA WSL" -Action $acao -Trigger $gat -Settings $conf -Principal $p -Force | Out-Null
+Start-ScheduledTask -TaskName "OpenWA WSL"
+```
+
 (O Docker sobe pelo systemd e os containers têm `restart: unless-stopped`.)
 
 ## 2. Instalar o Docker Engine (não o Docker Desktop)
@@ -80,24 +95,45 @@ Preencher no `.env`:
   Function `whatsapp-openwa-webhook`.
 - `WA_WORKER_SECRET` — o **mesmo** valor do secret `WA_WORKER_SECRET` da Edge Function
   `whatsapp-openwa-worker`.
-- `SUPABASE_ANON_KEY` — chave pública (anon) do projeto.
+- `SUPABASE_ANON_KEY` — chave pública do projeto (a `sb_publishable_…` serve para a campainha).
 - `OPENWA_API_KEY` — deixar vazio por enquanto (passo 6).
 - `OPENWA_DIGEST` — passo 4.
 
-## 4. Fixar a imagem (digest)
+Os 2 segredos, gerados uma vez e gravados nos dois lados sem aparecer na tela (PowerShell,
+na pasta do repositório; `gravar-segredos.sh` recebe os valores por `WSLENV` — pipe do
+PowerShell para o WSL põe BOM, e `Read-Host` dentro de bloco colado chega vazio):
 
-A imagem é sempre por **digest**, nunca por tag. Conferir antes o nome da imagem no
-workflow de release do repositório do OpenWA (`.github/workflows/release.yml` publica em
-`ghcr.io/<repositório em minúsculas>` → `ghcr.io/rmyndharis/openwa`). Resolver o digest
-da tag `v0.31.0`:
-
-```bash
-docker buildx imagetools inspect ghcr.io/rmyndharis/openwa:v0.31.0 --format '{{json .Manifest.Digest}}'
-# ou: docker manifest inspect -v ghcr.io/rmyndharis/openwa:v0.31.0  (campo "digest" do índice)
+```powershell
+wsl -d openwa -- cp /mnt/c/<caminho-do-repo>/infra/openwa/gravar-segredos.sh /home/<usuario>/openwa/
+function New-Segredo { $b = New-Object byte[] 32; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); ($b | % { $_.ToString('x2') }) -join '' }
+$env:WA_W = New-Segredo; $env:WA_H = New-Segredo; $env:WSLENV = "WA_W:WA_H"
+npx supabase secrets set "WA_WORKER_SECRET=$env:WA_W" "OPENWA_WEBHOOK_SECRET=$env:WA_H"
+wsl -d openwa --exec bash /home/<usuario>/openwa/gravar-segredos.sh
+Remove-Item Env:WA_W, Env:WA_H, Env:WSLENV -ErrorAction SilentlyContinue
 ```
 
-Colocar no `.env`: `OPENWA_DIGEST=sha256:...` (com o prefixo `sha256:`). Anotar aqui o
-digest usado: `______________________________`.
+Conferir que batem sem expor: `npx supabase secrets list` mostra o SHA-256 de cada valor;
+no WSL, `grep '^WA_WORKER_SECRET=' .env | cut -d= -f2- | tr -d '\n' | sha256sum` deve dar o mesmo.
+
+> Comando para o WSL a partir do Windows: `wsl -d openwa -- bash -c '…$VAR…'` expande o `$`
+> antes de chegar ao bash. Usar `wsl -d openwa --exec bash script.sh` ou `bash -s` com heredoc.
+
+## 4. Fixar a imagem (digest)
+
+A imagem é sempre por **digest**, nunca por tag. O registro é `ghcr.io/rmyndharis/openwa`;
+as tags **não têm "v"** (`0.31.0`, `0.32.0`, `latest`) e cada commit do `main` tem a sua
+(7 caracteres do SHA). A tag de versão e a de commit podem ser imagens diferentes — conferir
+de qual commit a imagem saiu no rótulo `org.opencontainers.image.revision`:
+
+```bash
+docker buildx imagetools inspect ghcr.io/rmyndharis/openwa:5eaadd3 --format '{{json .Manifest.Digest}}'
+```
+
+Colocar no `.env`: `OPENWA_DIGEST=sha256:...` (com o prefixo `sha256:`).
+
+**Digest em uso (24/11/2026):** `sha256:b49439b6ef1847aa8321d0adc2356a900eccf7ac498ee462b04fc9cd893df00e`
+= build do commit `5eaadd39` (o código conferido no design). A tag `0.31.0` é outro build
+(commit `7933167`, 21/11) e **não** é esta imagem.
 
 Opcional (recomendado): fixar também a base do worker —
 `docker buildx imagetools inspect node:22-alpine` → `WORKER_NODE_IMAGE=node:22-alpine@sha256:...`.
@@ -132,7 +168,9 @@ curl -fsS -X POST "$OW/auth/api-keys" -H "X-API-Key: $API_MASTER_KEY" \
 ```
 
 Colocar o `apiKey` em `OPENWA_API_KEY` no `.env` e recriar o worker:
-`docker compose up -d` (o compose recria só o que mudou).
+`docker compose up -d --force-recreate worker` (só `up -d` **não** recriou o worker depois
+de mudar o `.env` — conferido na instalação). O log deve mostrar "sessão do OpenWA encontrada
+pelo nome" e "campainha assinada".
 
 ## 7. Registrar o webhook
 
@@ -158,6 +196,9 @@ aplica é o usuário** (nunca `db push`):
 ```sql
 UPDATE public.wa_conexoes SET sessao_remota = '<SID>' WHERE sessao_remota = 'opura';
 ```
+
+O `db query` não imprime nada para UPDATE; conferir com
+`SELECT sessao_remota, estado, visto_em FROM public.wa_conexoes` (`visto_em` atualiza a cada minuto).
 
 Sem isso o webhook responde 403 e o "estou vivo" do worker responde 404 (o worker avisa
 no log com o texto "wa_conexoes.sessao_remota precisa ser o id da sessão do OpenWA").

@@ -7,7 +7,7 @@
 #   • redis: sem porta publicada, numa rede interna (sem saída) só com o openwa.
 #   • worker: sem porta. Só conexões de SAÍDA (Supabase Realtime + Edge Function).
 #
-# Variáveis do OpenWA conferidas no .env.example do commit fixado (5eaadd39, v0.31.0).
+# Variáveis do OpenWA conferidas no .env.example do commit fixado (5eaadd39; a imagem é o build desse commit, tag `5eaadd3`).
 # Valores fixos aqui ficam no `environment:` do container: o ambiente do processo vence o
 # .env e o data/.env.generated do painel (por isso a fila/Redis valem mesmo sendo
 # "gerenciados pelo painel" no compose oficial). Nada de env_file: cada serviço recebe só

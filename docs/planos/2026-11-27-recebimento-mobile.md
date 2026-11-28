@@ -218,3 +218,6 @@ ACL (REGRA #7):
   - Vitest: `recebimentoRegra` (31), `pedidoStatusEfeitos` (9), `syncOrderToFinance` adaptado; 33 arquivos/309 testes
     verdes; `tsc` 0.
   - Pendente: o usuário aplica as 5 migrations; provas em produção; merge.
+- 2026-11-27: migrations 300000–300400 **aplicadas pelo usuário**. Conferido no banco: 14 funções novas, `received_by`/`origem`,
+  gatilho de autoria, CHECK com as ações `recebimento_*`, trava do fornecedor. Provas em produção: `teste-obra-parcelas-atomico`,
+  `teste-recebimento-nucleo`, `teste-link-celular-recebimento`, `teste-link-celular-pedido-fast` **TUDO OK**.

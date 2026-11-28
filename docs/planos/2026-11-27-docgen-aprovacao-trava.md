@@ -10,6 +10,9 @@ exige"* — e perguntou: *"Quer que eu corrija isso numa frente separada?"*. O u
 
 Sessão: bef90ec4-4d31-470b-a193-71ce97673653 · 27/11/2026, à noite
 
+Revisão r2 (28/11/2026, mesma revisão): o reenvio (`fn_alcada_enviar(p_reenvio => true)`) mantém
+a cadeia e só exige REJEITADO — que o cliente gravava direto. Mesma porta do achado 1.
+
 Revisão r1 (28/11/2026, revisor da coordenação, mesma sessão): (1) aprovação velha valendo para
 texto novo — o cliente punha PENDENTE direto com a cadeia antiga e o "nível 2" sem aprovador
 cadastrado era aprovado por qualquer membro; (2) INSERT direto de ofício já emitido; (3) comentar
@@ -50,7 +53,8 @@ que o corpo copiado chama `fn_alcada_org_condominio` (só a 915100 cria); (4) ho
 | 27/11 | Trava nova só para ofício, ou a da 915100? | A da 915100, **sem mudar o corpo** (uma regra só, já revisada), ligada só em `doc_gen_documentos`. A função só é criada se não existir — a 915100, quando aplicada, prevalece e estende às 8 tabelas. |
 | 27/11 | Corrigir as outras 7 tabelas aqui? | Não (escopo do pedido). Listadas abaixo, com prova; a 915100 precisa de conserto antes de aplicar. |
 
-| 28/11 (r1) | Como impedir que a aprovação de um texto valha para outro? | Pela API o ofício nunca entra em PENDENTE direto — só por `fn_alcada_enviar`, que zera a cadeia (gatilho próprio, sem mexer no corpo de `fn_alcada_guarda`). |
+| 28/11 (r1) | Como impedir que a aprovação de um texto valha para outro? | Pela API o ofício nunca entra em PENDENTE direto (gatilho próprio, sem mexer no corpo de `fn_alcada_guarda`). ⚠️ A premissa "só `fn_alcada_enviar`, que zera a cadeia" era falsa — ver r2. |
+| 28/11 (r2) | O reenvio (`p_reenvio`) mantém a cadeia e só pede REJEITADO, que o cliente gravava direto | Pela API a única mudança de `approval_status` aceita é PARA `RASCUNHO`; INSERT só `RASCUNHO`. PENDENTE/APROVADO/REJEITADO só pelas RPCs; reenvio só depois de rejeição de verdade (`fn_alcada_rejeitar`), e a rodada recomeça no nível 1. |
 | 28/11 (r1) | INSERT de ofício não rascunho | Recusado para qualquer escritor sem `docgen.emitindo`; nenhum caminho legítimo insere ofício emitido (conferido em pg_proc e supabase/). Compatível com `trg_doc_gen_edital_assembleia` (feat/edital-assembleia). |
 
 ## Plano
@@ -74,6 +78,11 @@ que o corpo copiado chama `fn_alcada_org_condominio` (só a 915100 cria); (4) ho
    **Pronto quando**: as seções 7 e 8 da prova falham com a versão r0 da migration (veio `ok:1`
    em "r1: a troca o texto do aprovado e põe PENDENTE no mesmo PATCH" e em "r1: a insere ofício
    já EMITIDO com número") e dão `TUDO OK` com a r1, aplicada 1× e 2×.
+4. (r2) `fn_doc_gen_trava_entrada`: pela API, `approval_status` só muda PARA `RASCUNHO`; INSERT só
+   `RASCUNHO`. **Pronto quando**: a seção 10 da prova (REJEITADO forjado sobre aprovado, sobre
+   rascunho com cadeia antiga e sobre PENDENTE com nível 1 dado; INSERT REJEITADO; rejeição de
+   verdade → reenvio pede o nível 1 → aprovar → emitir; retirar) falha com a r1 e dá `TUDO OK`
+   com a r2, 1× e 2×.
 
 ## Estado
 
@@ -87,6 +96,9 @@ que o corpo copiado chama `fn_alcada_org_condominio` (só a 915100 cria); (4) ho
   recusado" muda — continua recusado (42501), mas com a mensagem de `trg_alcada_guarda`, que
   dispara antes da do edital; com esse caso aceitando qualquer 42501, `TUDO OK`. Ajuste é na
   prova do edital (ou na ordem do gatilho dela), não aqui.
+- [x] 4 r2 — ataque provado com a r1 (aprovar X → editar Y → PATCH REJEITADO → reenvio → nível 2
+  por qualquer membro → OF-0001/2026 emitido com Y). Seção 10 da prova: com a r1 falha em "r2: a
+  passa o APROVADO para REJEITADO direto" (veio `ok:1`); com a r2, `TUDO OK` (1× e 2×).
 - [ ] aplicar a migration e rodar a prova direto (usuário).
 
 ### Fora deste PR (mesmo padrão, sem correção aqui)

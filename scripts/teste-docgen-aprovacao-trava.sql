@@ -5,9 +5,10 @@
 --     REJEITADO → APROVADO, cadeia forjada, INSERT de rascunho já aprovado ou com passo,
 --     níveis rebaixados no meio da aprovação.
 --   • Revisão r1: aprovação velha não vale para texto novo (o cliente não põe PENDENTE direto —
---     aprovado com/sem texto trocado, retirado e editado, INSERT PENDENTE; só fn_alcada_enviar,
---     que zera a cadeia); ofício não nasce emitido (INSERT com status/número/emitido_* recusado
+--     aprovado com/sem texto trocado, retirado e editado, INSERT PENDENTE); ofício não nasce emitido (INSERT com status/número/emitido_* recusado
 --     para qualquer escritor sem a marca docgen.emitindo).
+--   • Revisão r2: nem REJEITADO direto (abriria o reenvio, que mantém a cadeia) — pela API a
+--     aprovação só volta a RASCUNHO; rejeição de verdade → reenvio recomeça no nível 1.
 --   • Caminhos legítimos seguem: enviar (fn_alcada_enviar), quem não é aprovador não aprova,
 --     emitir em aprovação é recusado, o aprovador aprova (fn_alcada_aprovar) e o ofício é
 --     emitido; texto alterado depois da aprovação volta a RASCUNHO; retirar da aprovação
@@ -26,7 +27,7 @@
 -- primeiro caso ("a marca o rascunho APROVADO direto (PATCH)", veio ok:1) — é o RED.
 -- Com a versão r0 da migration (só trg_alcada_guarda), falha em "r1: a troca o texto do aprovado
 -- e põe PENDENTE no mesmo PATCH" (veio ok:1); sem a seção 7, em "r1: a insere ofício já EMITIDO
--- com número" (veio ok:1).
+-- com número" (veio ok:1). Com a r1, falha em "r2: a passa o APROVADO para REJEITADO direto" (ok:1).
 --
 -- Ensaio (migration ainda não aplicada; o montador tira o BEGIN;/COMMIT; dela):
 --   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-docgen-aprovacao-trava.sql \
@@ -109,6 +110,7 @@ DECLARE
     emitir  CONSTANT TEXT := 'SELECT public.doc_gen_emitir(%L)';
     enviar  CONSTANT TEXT := 'SELECT public.fn_alcada_enviar(''doc_gen_documento'', %L, ''exigir1'') ->> ''approval_status''';
     aprova  CONSTANT TEXT := 'SELECT public.fn_alcada_aprovar(''doc_gen_documento'', %L, %s, NULL, ''{"level1_label":"Gestor","level2_label":"Diretoria"}''::jsonb) ->> ''approval_status''';
+    reenvia CONSTANT TEXT := 'SELECT public.fn_alcada_enviar(''doc_gen_documento'', %L, ''exigir1'', ''{}''::jsonb, true) ->> ''approval_status''';
     rejeita CONSTANT TEXT := 'SELECT public.fn_alcada_rejeitar(''doc_gen_documento'', %L, ''teste'') ->> ''approval_status''';
     nega    CONSTANT TEXT := '42501:ALCADA_NAO_PERMITE:%';
 BEGIN
@@ -283,6 +285,43 @@ BEGIN
     PERFORM set_config('docgen.emitindo', 'off', true);
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.doc_gen_documentos WHERE numero = 'OF-996/2026' AND organization_id = org_a),
         'r1: com docgen.emitindo (marca da emissão) o servidor insere');
+
+    -- ── 10. rejeição forjada + reenvio (revisão r2) ──────────────────────────
+    -- fn_alcada_enviar(p_reenvio => true) exige só REJEITADO e MANTÉM a cadeia. Se o cliente pudesse
+    -- gravar REJEITADO direto, a aprovação do texto antigo voltaria a contar no texto novo.
+    d := pg_temp.oficio(org_a, m_exige, 'rejeicao forjada');
+    PERFORM pg_temp.da(pg_temp.au(a, format(enviar, d)), 'ok:PENDENTE', 'r2: a envia');
+    PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, 'NULL')), 'ok:APROVADO', 'r2: b aprova o texto X');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''REJEITADO''', d)), nega,
+        'r2: a passa o APROVADO para REJEITADO direto');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'assunto = ''TESTE APROVACAO TRAVA texto Y'', versao = versao + 1', d)), 'ok:1',
+        'r2: a troca o texto para Y (volta a RASCUNHO, cadeia [L1 b] fica)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''REJEITADO''', d)), nega,
+        'r2: rascunho com a cadeia antiga: a grava REJEITADO direto');
+    PERFORM pg_temp.da(pg_temp.au(a, format(reenvia, d)), 'P0001:Só item rejeitado é reenviado para aprovação.',
+        'r2: sem a rejeição forjada, o reenvio (que mantém a cadeia) é recusado');
+    PERFORM pg_temp.da(pg_temp.au(a, format(ins, ', approval_status', org_a, m_exige, ', ''REJEITADO''')), nega,
+        'r2: a insere rascunho já REJEITADO');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''RASCUNHO''', d)), 'ok:1',
+        'r2: voltar a RASCUNHO segue livre (retirar)');
+
+    -- em aprovação, nível 1 de 2 dado
+    PERFORM pg_temp.da(pg_temp.au(a, format(enviar, d)), 'ok:PENDENTE', 'r2: a envia o texto Y pela RPC (cadeia zerada)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_required_levels = 2', d)), 'ok:1', 'r2: 2 níveis');
+    PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, '1')), 'ok:PENDENTE', 'r2: b aprova o nível 1 de Y');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'approval_status = ''REJEITADO''', d)), nega,
+        'r2: PENDENTE com nível 1 dado: a grava REJEITADO direto');
+
+    -- rejeição de verdade: o reenvio pede o nível 1 de novo
+    PERFORM pg_temp.da(pg_temp.au(b, format(rejeita, d)), 'ok:REJEITADO', 'r2: b rejeita pela RPC');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'assunto = ''TESTE APROVACAO TRAVA texto Z'', versao = versao + 1', d)), 'ok:1',
+        'r2: a corrige o texto do rejeitado');
+    PERFORM pg_temp.da(pg_temp.au(a, format(reenvia, d)), 'ok:PENDENTE', 'r2: a reenvia o rejeitado (p_reenvio, cadeia fica)');
+    PERFORM pg_temp.confere(pg_temp.st(d) = 'RASCUNHO/PENDENTE/1/2', 'r2: reenviado com o histórico [L1 b, REJEITADO]');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, d, 'NULL')), 'P0001:ALCADA_NAO_PERMITE: o nível 1 deste item é aprovado por %',
+        'r2: depois da rejeição a rodada recomeça no nível 1 (só b)');
+    PERFORM pg_temp.da(pg_temp.au(b, format(aprova, d, '1')), 'ok:APROVADO', 'r2: b aprova Z');
+    PERFORM pg_temp.da(pg_temp.au(a, format(emitir, d)), 'ok:%', 'r2: a emite o texto que b aprovou');
 
     -- ── 9. as travas estão no lugar, e não ficam expostas ────────────────────
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM pg_trigger t WHERE t.tgrelid = 'public.doc_gen_documentos'::regclass

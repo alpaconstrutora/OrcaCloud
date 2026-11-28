@@ -1,6 +1,6 @@
 -- ==========================================================================
 -- Ofícios: só a aprovação marca o ofício como aprovado (e ofício não nasce emitido)
--- Date: 2026-11-28 (pedido de 27/11/2026; revisão r1 em 28/11)
+-- Date: 2026-11-28 (pedido de 27/11/2026; revisões r1 e r2 em 28/11)
 -- Plano: docs/planos/2026-11-27-docgen-aprovacao-trava.md
 -- Prova: scripts/teste-docgen-aprovacao-trava.sql
 -- Base:  fn_alcada_guarda de aplicar_20271118915100_alcada_trava_servidor.sql (F14, PR #576),
@@ -32,6 +32,15 @@
 --   2. Ofício inserido já emitido. fn_doc_gen_congelar é só BEFORE UPDATE e a policy de INSERT
 --      só confere a organização: um membro inseria {status:'EMITIDO', numero:'OF-…', …}.
 --
+--   Revisão r2 (28/11) — a mesma porta do 1 pela rejeição. A r1 dizia "o cliente só entra em
+--   PENDENTE por fn_alcada_enviar, que zera a cadeia" — falso: o REENVIO
+--   (fn_alcada_enviar(…, p_reenvio => true), executável por authenticated) exige só
+--   approval_status = 'REJEITADO' e MANTÉM a cadeia, e REJEITADO o cliente gravava direto.
+--   Ataque provado com a r1: b aprova o texto X → a troca para Y (RASCUNHO, cadeia [L1 b]) →
+--   PATCH {approval_status:'REJEITADO'} → reenvio → PENDENTE [L1 b] → nível 2 sem aprovador →
+--   a aprova → APROVADO → OF-0001/2026 emitido com o texto Y, que b não viu. Variantes: APROVADO
+--   → REJEITADO direto; PENDENTE com nível 1 dado → REJEITADO direto.
+--
 -- O QUE MUDA
 --   trg_alcada_guarda (BEFORE INSERT OR UPDATE) SÓ em doc_gen_documentos, com a MESMA função da
 --   915100. Para quem escreve pela API (current_user authenticated/anon) fora das RPCs da alçada:
@@ -53,10 +62,16 @@
 --   inteira QUEBRA toda gravação de título a pagar que mude a organização (função inexistente).
 --
 --   trg_doc_gen_trava_entrada (BEFORE INSERT OR UPDATE, fn_doc_gen_trava_entrada) — r1:
---     • pela API (current_user authenticated/anon, fora das RPCs da alçada), o ofício NUNCA entra
---       em PENDENTE direto — nem INSERT PENDENTE, nem UPDATE de outro estado para PENDENTE. Só
---       fn_alcada_enviar, que zera a cadeia: o texto novo pede o nível 1 de novo. O front já envia
---       só pela RPC (docGenDocumentoService.enviarParaAprovacao → approvalService.submit).
+--     • pela API (current_user authenticated/anon, fora das RPCs da alçada; função DEFINER roda
+--       como o dono e não conta) a ÚNICA mudança de approval_status aceita é PARA 'RASCUNHO' (o
+--       "retirar", e o que fn_doc_gen_congelar faz ao editar um aprovado); INSERT só com
+--       'RASCUNHO' (a coluna é NOT NULL DEFAULT 'RASCUNHO' — NULL não chega aqui). PENDENTE,
+--       APROVADO e REJEITADO só pelas RPCs: fn_alcada_enviar (o envio zera a cadeia; o reenvio a
+--       mantém, mas só existe depois de uma rejeição DE VERDADE, de fn_alcada_rejeitar, e a rodada
+--       recomeça no nível 1 depois dela), fn_alcada_aprovar e fn_alcada_rejeitar.
+--       Front conferido em 28/11: envia e reenvia por docGenDocumentoService.enviarParaAprovacao
+--       → approvalService.submit (o botão "Reenviar" do ofício é o mesmo envio, sem p_reenvio),
+--       rejeita por fn_alcada_rejeitar, retirarDaAprovacao grava 'RASCUNHO'.
 --     • QUALQUER escritor: INSERT nasce RASCUNHO, sem numero/emitido_em/emitido_por — salvo com a
 --       marca da emissão (docgen.emitindo = 'on'). Caminhos que inserem ofício, conferidos em 28/11:
 --       só o front (Novo ofício, rascunho). Nenhuma função do banco nem Edge Function faz INSERT em
@@ -285,11 +300,14 @@ DECLARE
                           AND COALESCE(current_setting('orcacloud.alcada_servidor', true), '') <> 'on';
     v_emitindo boolean := COALESCE(current_setting('docgen.emitindo', true), '') = 'on';
 BEGIN
-    -- 1. Em aprovação só pela RPC de envio (fn_alcada_enviar zera a cadeia: a aprovação dada a
-    --    um texto anterior não conta para o texto de agora).
-    IF v_cliente AND NEW.approval_status = 'PENDENTE'
-       AND (TG_OP = 'INSERT' OR OLD.approval_status IS DISTINCT FROM 'PENDENTE') THEN
-        RAISE EXCEPTION 'ALCADA_NAO_PERMITE: o ofício vai para aprovação só pelo botão "Enviar para aprovação". Recarregue a tela e tente de novo.'
+    -- 1. Pela API, a aprovação só RECUA para rascunho (retirar; editar um aprovado). Enviar,
+    --    reenviar, aprovar e rejeitar são das RPCs da alçada — senão uma rejeição forjada abriria
+    --    o reenvio, que mantém a cadeia, e a aprovação de um texto anterior contaria no de agora.
+    IF v_cliente
+       AND ((TG_OP = 'INSERT' AND NEW.approval_status IS DISTINCT FROM 'RASCUNHO')
+            OR (TG_OP = 'UPDATE' AND NEW.approval_status IS DISTINCT FROM OLD.approval_status
+                AND NEW.approval_status IS DISTINCT FROM 'RASCUNHO')) THEN
+        RAISE EXCEPTION 'ALCADA_NAO_PERMITE: a situação da aprovação do ofício muda só pelos botões de aprovação (enviar, aprovar, rejeitar). Recarregue a tela e tente de novo.'
             USING ERRCODE = '42501';
     END IF;
 

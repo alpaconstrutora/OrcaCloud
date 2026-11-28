@@ -205,8 +205,9 @@ const unitModeColumnKeys = ['name', 'empreendimento', 'block', 'floor', 'private
 
 // Colunas da aba Contratos (§5.2/§6.1).
 const DEAL_COLUMNS: ColumnConfig[] = [
-    { key: 'id', label: 'ID', sortable: true },
-    { key: 'code', label: 'Código', sortable: true },
+    // ID (uuid cortado) e Código saíram (pedido de 27/11/2026): o que identifica o
+    // contrato é o número dele (contracts.number, ex.: CTL-006-012-0001).
+    { key: '_contractNumber', label: 'Número do Contrato', sortable: true },
     { key: '_propertyName', label: 'Unidade', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: '_clientName', label: 'Cliente', sortable: true },
@@ -226,7 +227,7 @@ const DEAL_COLUMNS: ColumnConfig[] = [
 // tela inteira esconde coluna pela engrenagem (§3). O que foi corrigido é o
 // excesso gratuito (1560 → 1410) e a folga da coluna de ação.
 const DEAL_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    id: 95, code: 140, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 150, date: 115,
+    _contractNumber: 170, _propertyName: 150, empreendimento: 184, _clientName: 200, type: 100, value: 150, date: 115,
     rental_analysis: 110, rental_value: 137, rental_base: 150, value_per_sqm: 120, status: 120, actions: 130,
 };
 
@@ -582,8 +583,7 @@ function renderUnitsCell(key: string, property: Property, ctx: UnitsRowCtx): Rea
 
 // Header por coluna da tabela de Contratos (ver DEAL_COLUMNS acima).
 const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
-    id:              { label: 'ID',            sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    code:            { label: 'Código',         sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    _contractNumber: { label: 'Número do Contrato', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _propertyName:   { label: 'Unidade',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento:  { label: 'Empreendimento', sortable: true,  className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     _clientName:     { label: 'Cliente',        sortable: true,  className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -598,8 +598,7 @@ const DEAL_COLUMN_HEADERS: Record<string, UnitsHeaderDef> = {
 };
 
 const DEAL_TD_CLASS: Record<string, string> = {
-    id: 'text-sm font-normal text-blue-600 truncate',
-    code: 'text-sm font-normal text-gray-600 truncate',
+    _contractNumber: 'text-sm font-normal text-gray-700 truncate',
     _propertyName: 'text-sm font-normal text-gray-900 group-hover:text-blue-600 transition-colors truncate',
     empreendimento: '',
     _clientName: 'text-sm font-normal text-gray-600 truncate',
@@ -615,7 +614,7 @@ const DEAL_TD_CLASS: Record<string, string> = {
 
 // Mesmo shape do item que `sortedDeals` produz (ver useMemo mais abaixo no
 // componente) — negócio + os campos resolvidos (_propertyName/_clientName/...).
-type SortedDeal = PropertyDeal & { _propertyName: string; _unitCount: number; _unitNames: string; _clientName: string };
+type SortedDeal = PropertyDeal & { _propertyName: string; _unitCount: number; _unitNames: string; _clientName: string; _contractNumber: string };
 
 interface DealRowCtx {
     properties: Property[];
@@ -627,10 +626,9 @@ interface DealRowCtx {
 
 function renderDealCell(key: string, deal: SortedDeal, ctx: DealRowCtx): React.ReactNode {
     switch (key) {
-        case 'id':
-            return `#${deal.id.substring(0, 8).toUpperCase()}`;
-        case 'code':
-            return deal.code || '—';
+        case '_contractNumber':
+            // Negociação ainda sem contrato gerado: diz isso, em vez de um traço mudo.
+            return deal._contractNumber || <span className="text-gray-500" title="Contrato ainda não gerado nesta negociação">Sem contrato</span>;
         case '_propertyName': {
             const property = ctx.properties.find(p => p.id === deal.property_id);
             return (
@@ -814,6 +812,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // `empreendimentos.commercial_rental_building_id` (edifício-pai).
     const [empreendimentoByProperty, setEmpreendimentoByProperty] = useState<Record<string, { id: string; name: string; towerName?: string }>>({});
     const [deals, setDeals] = useState<PropertyDeal[]>([]);
+    // Número do contrato de cada negociação (contracts.number por deal_id). O campo
+    // da negociação (commercial_deals.contract_number) está vazio em 9 das 10
+    // locações — quem tem o número é o contrato gerado (27/11/2026).
+    const [numeroDoContrato, setNumeroDoContrato] = useState<Record<string, string>>({});
     const [clients, setClients] = useState<Client[]>([]);
     const [brokers, setBrokers] = useState<BrokerProfile[]>([]);
     const [brokerAccess, setBrokerAccess] = useState<Record<string, boolean>>({});
@@ -909,7 +911,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         console.log('[Commercial] Loading data for organization:', organizationId);
         setLoading(true);
         try {
-            const [propsData, dealsData, clientsData, empMap] = await Promise.all([
+            const [propsData, dealsData, clientsData, empMap, numeros] = await Promise.all([
                 commercialService.listProperties(organizationId),
                 commercialService.listDeals(),
                 // Clientes alimentam a COLUNA de locatário e o modal — não a
@@ -925,11 +927,22 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 // a unidade pode estar publicada em Vendas e Locações ao mesmo tempo,
                 // e os dois eixos são independentes.
                 empreendimentoService.mapPropertiesToEmpreendimentos(organizationId, 'RENTAL').catch(() => ({})),
+                // Sem filtro de organização (REGRA #5): a RLS recorta, como em listDeals.
+                supabase
+                    .from('contracts')
+                    .select('deal_id, number')
+                    .eq('domain', 'LOCACAO')
+                    .not('deal_id', 'is', null)
+                    .then(({ data, error }) => {
+                        if (error) { console.warn('[Commercial] Números de contrato indisponíveis:', error.message); return {}; }
+                        return Object.fromEntries((data ?? []).map(c => [c.deal_id as string, c.number as string]));
+                    }),
             ]);
             setProperties(propsData.filter(p => !p.purpose || p.purpose === 'RENTAL' || p.purpose === 'BOTH'));
             setDeals(dealsData.filter(d => d.type === 'RENTAL'));
             setClients(clientsData);
             setEmpreendimentoByProperty(empMap);
+            setNumeroDoContrato(numeros as Record<string, string>);
         } catch (err) {
             console.error('[Commercial] Error loading data:', err);
         } finally {
@@ -1399,6 +1412,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 _clientName: dealBuyersOf(d)
                     .map(b => clients.find(c => c.id === b.client_id)?.name)
                     .filter(Boolean).join(', '),
+                _contractNumber: numeroDoContrato[d.id] ?? '',
             };
         });
         const term = dealSearchTerm.toLowerCase();
@@ -1406,8 +1420,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             ? withLookup.filter(d =>
                 d._propertyName.toLowerCase().includes(term) ||
                 d._clientName.toLowerCase().includes(term) ||
-                d.id.toLowerCase().includes(term) ||
-                (d.code || '').toLowerCase().includes(term)
+                d._contractNumber.toLowerCase().includes(term)
             )
             : withLookup;
         if (!dealSortConfig) return filtered;
@@ -1432,7 +1445,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [dealsDoEdificio, properties, clients, dealSortConfig, dealSearchTerm, empreendimentoByProperty]);
+    }, [dealsDoEdificio, properties, clients, dealSortConfig, dealSearchTerm, empreendimentoByProperty, numeroDoContrato]);
 
     // Corretores ordenáveis (§6.3) — busca própria (§5.2): o searchTerm global
     // pertence à aba Unidades e não tem input visível aqui, então a aba
@@ -2996,7 +3009,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                     <input
                                         type="text"
-                                        placeholder="Buscar contrato por imóvel, cliente ou ID..."
+                                        placeholder="Buscar por número do contrato, imóvel ou cliente..."
                                         value={dealSearchTerm}
                                         onChange={(e) => setDealSearchTerm(e.target.value)}
                                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -3046,7 +3059,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                     {getDealStatusDisplay(deal.status).label}
                                                 </span>
                                                 <div className="flex flex-col items-end ml-auto">
-                                                    <span className="text-xs font-medium text-blue-600">#{deal.id.substring(0, 8).toUpperCase()}</span>
+                                                    <span className="text-xs font-medium text-blue-600">{(deal as { _contractNumber?: string })._contractNumber || 'Sem contrato'}</span>
                                                     <span className="text-xs text-gray-400 mt-0.5">
                                                         {new Date(deal.date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </span>

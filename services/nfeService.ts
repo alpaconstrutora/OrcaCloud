@@ -3,6 +3,7 @@
 // Serviço NF-e: upload, consultas e replay de dead letters
 // ============================================================
 
+import { sanitizeFileName } from '../utils/storageUtils';
 import { supabase } from '../lib/supabase';
 import type {
   RawDocument,
@@ -53,7 +54,8 @@ export async function uploadNFe(
 
   // 2. Upload para o bucket fiscal-documents
   const year = new Date().getFullYear();
-  const filePath = `${organizationId}/${year}/${file.name}`;
+  // Nome saneado: o Storage recusa chave com acento (400 InvalidKey).
+  const filePath = `${organizationId}/${year}/${sanitizeFileName(file.name)}`;
 
   const { error: storageError } = await supabase.storage
     .from('fiscal-documents')

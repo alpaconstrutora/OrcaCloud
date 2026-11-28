@@ -5,7 +5,7 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 import { podeUsarWhatsappEmpresa, MOTIVO_SEM_WHATSAPP_EMPRESA } from '../utils/permissaoWhatsappEmpresa';
 
 // Piloto WhatsApp pelo OpenWA (23/11/2026), Tarefa 6. Regra igual à do banco (`wa_pode_usar`,
-// migration aplicar_20271123100000): só a flag própria liga; acesso total sempre pode; nada herda.
+// migration aplicar_20271123100500): só a flag própria liga; acesso total sempre pode; nada herda.
 describe('permissão "Usar o WhatsApp da empresa"', () => {
     it('liga só com canUseWhatsappEmpresa === true', () => {
         expect(podeUsarWhatsappEmpresa({ permissoes: { canUseWhatsappEmpresa: true }, acessoTotal: false })).toBe(true);

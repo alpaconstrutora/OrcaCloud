@@ -1,6 +1,6 @@
 -- scripts/teste-whatsapp-openwa.sql
 -- Prova do banco do WhatsApp pelo OpenWA (fila, conexão, uso por organização, campainha).
--- Migration: supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql
+-- Migration: supabase/migrations/aplicar_20271123100500_whatsapp_openwa.sql
 -- Plano: docs/planos/2026-11-23-whatsapp-openwa-piloto-pedido.md (Design §2; Task 2).
 --
 -- O que prova:
@@ -28,7 +28,7 @@
 -- "tabela wa_mensagens existe" (é o RED).
 --
 --   bash scripts/montar-ensaio.sh -o "$TEMP/ensaio-wa.sql" scripts/teste-whatsapp-openwa.sql \
---        supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql
+--        supabase/migrations/aplicar_20271123100500_whatsapp_openwa.sql
 --   npx supabase db query --linked -f "$TEMP/ensaio-wa.sql"          # última linha: TUDO OK
 -- Depois de aplicada a migration, a prova roda como está:
 --   npx supabase db query --linked -f scripts/teste-whatsapp-openwa.sql

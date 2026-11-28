@@ -2,7 +2,7 @@
 --
 -- Plano: docs/planos/2026-11-23-whatsapp-openwa-piloto-pedido.md (Task 5).
 -- Depende de: nada (só o storage). Pode ser aplicada antes ou depois de
--- aplicar_20271123100000_whatsapp_openwa.sql.
+-- aplicar_20271123100500_whatsapp_openwa.sql.
 --
 -- ── O que cria ─────────────────────────────────────────────────────────────────
 --   • storage.buckets 'whatsapp-midia' — PRIVADO, até 5 MiB por arquivo, só os tipos

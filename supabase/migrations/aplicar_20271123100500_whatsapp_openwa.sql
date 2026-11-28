@@ -58,7 +58,7 @@
 --   Pergunta 3 (Edge Function): nenhuma nesta migration (Tasks 3–5).
 --
 -- ── Aplicar ────────────────────────────────────────────────────────────────────
---   npx supabase db query --linked -f supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql
+--   npx supabase db query --linked -f supabase/migrations/aplicar_20271123100500_whatsapp_openwa.sql
 --   (NUNCA db push). Não muda nada para o usuário: tabelas nascem vazias (menos a
 --   conexão inicial) e o front de hoje ignora order_chats.canal.
 --   O bloco "Provas" no fim aborta a transação se algo não bater. De fora:

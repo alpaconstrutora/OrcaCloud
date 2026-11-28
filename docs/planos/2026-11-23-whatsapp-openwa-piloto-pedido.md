@@ -548,7 +548,7 @@ export const JANELA_VINCULO_DIAS = 60;
 
 ### Task 2 — Banco: fila, conexão, uso por organização, campainha
 
-**Arquivos:** modificar `utils/rotinasAutomaticas.ts` (CATALOGO); criar `supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql` (conferir antes com `ls supabase/migrations | grep 20271123` — nenhum outro com o prefixo); prova `scripts/teste-whatsapp-openwa.sql` (modelo: `scripts/teste-tarefas-superadmin.sql`, com `-- MIGRATION`, `pg_temp.confere`, `pg_temp.como`, `ROLLBACK`, linha final `TUDO OK`).
+**Arquivos:** modificar `utils/rotinasAutomaticas.ts` (CATALOGO); criar `supabase/migrations/aplicar_20271123100500_whatsapp_openwa.sql` (conferir antes com `ls supabase/migrations | grep 20271123` — nenhum outro com o prefixo); prova `scripts/teste-whatsapp-openwa.sql` (modelo: `scripts/teste-tarefas-superadmin.sql`, com `-- MIGRATION`, `pg_temp.confere`, `pg_temp.como`, `ROLLBACK`, linha final `TUDO OK`).
 
 **Produz:** tabelas `wa_conexoes`, `wa_uso_por_org`, `wa_mensagens`, `wa_eventos_recebidos` e coluna `order_chats.canal` exatamente como no Design §2; e:
 ```sql
@@ -582,9 +582,9 @@ trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND sta
   - `wa_definir_uso` por membro comum → erro; por owner → grava.
 - [ ] **Passo 2** — montar ensaio sem a migration (`bash scripts/montar-ensaio.sh -o "$TEMP/ensaio.sql" scripts/teste-whatsapp-openwa.sql`) e **pedir ao usuário** para rodar → FALHA.
 - [ ] **Passo 3** — escrever a migration (cabeçalho com as 3 perguntas da REGRA #7 respondidas; `BEGIN; … COMMIT;` com `SET LOCAL lock_timeout`).
-- [ ] **Passo 4** — ensaio com a migration (`… scripts/teste-whatsapp-openwa.sql supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql`) → usuário roda → `TUDO OK`. Se `realtime.send` não existir/negar, registrar aqui e trocar a campainha por canal privado com policy em `realtime.messages` (modelo `aplicar_20271116905800_blueprint_canal_ramo_privado.sql`).
+- [ ] **Passo 4** — ensaio com a migration (`… scripts/teste-whatsapp-openwa.sql supabase/migrations/aplicar_20271123100500_whatsapp_openwa.sql`) → usuário roda → `TUDO OK`. Se `realtime.send` não existir/negar, registrar aqui e trocar a campainha por canal privado com policy em `realtime.messages` (modelo `aplicar_20271116905800_blueprint_canal_ramo_privado.sql`).
 - [ ] **Passo 5** — `bash scripts/check-rls-postura.sh` sem achado novo; commit `feat(whatsapp): fila e conexão do OpenWA no banco`.
-- [ ] **Passo 6** — usuário aplica a migration (`npx supabase db query --linked -f supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql`); conferir com `SELECT policyname FROM pg_policies WHERE tablename LIKE 'wa_%'`.
+- [ ] **Passo 6** — usuário aplica a migration (`npx supabase db query --linked -f supabase/migrations/aplicar_20271123100500_whatsapp_openwa.sql`); conferir com `SELECT policyname FROM pg_policies WHERE tablename LIKE 'wa_%'`.
 
 ### Task 3 — Edge Function `whatsapp-openwa` (tela → fila)
 
@@ -697,9 +697,19 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 ### Task 11 — Verificação de ponta a ponta e publicação
 
 - [ ] **Passo 1** — `npx vitest run --project leves` (contar falhas por grep, não por tail); `npx tsc --noEmit`; `bash scripts/check-ui-standard.sh` nos `.tsx`; `bash scripts/check-org-selector-guard.sh`; `bash scripts/verificar-views-anon.sh`.
-- [ ] **Passo 2** — **PORTÃO:** antes do push/merge, conferir no banco que as migrations `aplicar_20271123100000` e `aplicar_20271123110000` estão aplicadas (`SELECT 1 FROM information_schema.columns WHERE table_name='order_chats' AND column_name='canal'` e `SELECT to_regprocedure('public.wa_situacao()')`) — o front novo lê `order_chats.canal` e quebra o chat de todas as orgs sem ela (Ruling 16). Depois: PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.
+- [ ] **Passo 2** — **PORTÃO:** antes do push/merge, conferir no banco que as migrations `aplicar_20271123100500` e `aplicar_20271123110000` estão aplicadas (`SELECT 1 FROM information_schema.columns WHERE table_name='order_chats' AND column_name='canal'` e `SELECT to_regprocedure('public.wa_situacao()')`) — o front novo lê `order_chats.canal` e quebra o chat de todas as orgs sem ela (Ruling 16). Depois: PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.
 - [ ] **Passo 3** — roteiro "Verificação de ponta a ponta" (itens 1–8 acima) em produção, com 1 pedido real da Alpa e 1 da SPE do Garden, fornecedor de teste com o celular do usuário. Cada item com evidência (print ou SELECT) anotada em "Estado". Também: capturar 1 payload bruto de `message.received` e 1 de `message.ack` (log temporário ou `GET /api/webhooks/delivery-failures`/painel do OpenWA) e conferir `from`, `messageId`, `quotedMessage.id` e `status`; e 1 resposta do fornecedor CITANDO a mensagem do pedido.
 
 ## Estado
 
 - [x] Design aprovado pelo usuário — 23/11/2026 ("design aprovado")
+- [x] Plano aprovado, execução com subagentes — 23/11/2026; T1–T9 + revisão final prontos (PR #683)
+- [x] Migrations aplicadas pelo usuário e conferidas no banco — 24/11/2026 (portão da Ruling 16 ok)
+- [x] 3 Edge Functions publicadas + 2 secrets; sem credencial → 401 nas 3 — 24/11/2026
+- [x] Máquina: distro `openwa` + Docker Engine, OpenWA (build 5eaadd39), sessão pareada, webhook 200, tarefa
+      de boot S4U segurando a distro — 27–28/11/2026
+- [x] Migration renomeada `aplicar_20271123100000_whatsapp_openwa.sql` → `aplicar_20271123100500_…` (28/11):
+      o `main` ganhou `aplicar_20271123100000_opura_document_transcricoes.sql` com o mesmo prefixo
+      (trava `migrationsPrefixo`). Já estava aplicada por SQL direto com o nome antigo — o banco não muda.
+- [ ] Reiniciar sem login e ver o número voltar; BIOS "Restore AC Power Loss"
+- [ ] Task 11 Passo 3 — 1º pedido real pelo número
